@@ -33,7 +33,7 @@ import {
 } from "./services/mockCommunity";
 import { useReportFlow } from "./hooks/useReportFlow";
 import { listenWithPleos } from "./services/pleosMic";
-import { playMockTTS } from "./services/mockTTS";
+import { playNotificationChime } from "./services/notificationChime";
 import { validateReportBody, voiceCommandBody } from "./services/reportInput";
 import { useNotificationDelivery } from "./hooks/useNotificationDelivery";
 import {
@@ -50,6 +50,7 @@ declare global {
     GazeeGleo?: {
       ready(): void;
       complete(requestId: string, success: boolean): void;
+      completeRead(requestId: string, speech: string): void;
     };
   }
 }
@@ -103,7 +104,6 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
   const [wakeStatus, setWakeStatus] = useState("");
   const [ttsTestStatus, setTtsTestStatus] = useState("");
   const [ttsTesting, setTtsTesting] = useState(false);
-  const [ttsTestFallback, setTtsTestFallback] = useState("");
   const ttsTestController = useRef<AbortController | null>(null);
   const [offline, setOffline] = useState(false);
   const [viewState, setViewState] = useState<FeedView>(
@@ -174,7 +174,6 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
   const busy = !!session && ["listening", "processing", "success"].includes(session.phase);
   const speechActive = session?.phase === "listening" || session?.phase === "processing";
   const delivery = useNotificationDelivery({
-    restricted: driving,
     enabled: tts,
     paused: !!speechActive || wakeListening || ttsTesting,
   });
@@ -187,6 +186,11 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
     gleoRequest.current = requestId;
     setWakeListening(false);
   });
+  const readForGleo = useEffectEvent((requestId: string) => {
+    const received = Object.values(delivery.history).flat();
+    const latest = received.sort((a, b) => b.receivedAt - a.receivedAt)[0];
+    window.GazeeGleo?.completeRead(requestId, latest?.speech ?? "");
+  });
   useEffect(() => {
     const bridge = window.GazeeGleo;
     if (!bridge) return;
@@ -194,10 +198,15 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
       const { id, body } = (event as CustomEvent<{ id: string; body: string }>).detail;
       acceptGleo(id, body);
     }
+    function read(event: Event) {
+      readForGleo((event as CustomEvent<{ id: string }>).detail.id);
+    }
     window.addEventListener("gazee-gleo-report", receive);
+    window.addEventListener("gazee-gleo-read", read);
     bridge.ready();
     return () => {
       window.removeEventListener("gazee-gleo-report", receive);
+      window.removeEventListener("gazee-gleo-read", read);
       if (gleoRequest.current) bridge.complete(gleoRequest.current, false);
     };
   }, []);
@@ -362,18 +371,14 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
     const controller = new AbortController();
     ttsTestController.current = controller;
     setTtsTesting(true);
-    setTtsTestFallback("");
-    setTtsTestStatus("음성 출력 준비 중…");
-    void playMockTTS("가제 음성 테스트입니다. 전방 도로 상황을 알려드립니다.", {
+    setTtsTestStatus("알림음 준비 중…");
+    void playNotificationChime({
       signal: controller.signal,
-      manual: true,
-      onProgress: setTtsTestStatus,
-      onFallback: setTtsTestFallback,
       onStart: (engine) => setTtsTestStatus(`재생 중 · ${engine}`),
     })
-      .then((engine) => setTtsTestStatus(`음성 재생 완료 · ${engine}`))
+      .then((engine) => setTtsTestStatus(`알림음 재생 완료 · ${engine}`))
       .catch((error: unknown) => setTtsTestStatus(
-        `음성 실패 · ${error instanceof Error ? error.message : "알 수 없는 오류"}`,
+        `알림음 실패 · ${error instanceof Error ? error.message : "알 수 없는 오류"}`,
       ))
       .finally(() => {
         if (ttsTestController.current === controller) {
@@ -430,7 +435,7 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
                 <h1>{driving ? "운전에 집중하세요" : "지금, 내 주변 소식"}</h1>
                 <p className="state-subtitle">
                   {driving
-                    ? "가까운 곳의 제보는 음성으로 안내합니다."
+                    ? "새 제보는 알림음으로, 내용은 Gleo에게 요청해 들으세요."
                     : "같은 길을 지나는 운전자들의 제보를 확인하세요."}
                 </p>
               </div>
@@ -542,7 +547,7 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
                     onToggle={() => setTts((value) => !value)}
                     offline={offline}
                     onPlay={() => {
-                      if (notification) delivery.playManual(notification);
+                      if (notification) delivery.retryChime(notification);
                     }}
                   />
                 )
@@ -615,7 +620,7 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
               disabled={ttsTesting || busy || wakeListening}
             >
               <Icon name="speaker" size={17} />
-              음성 출력 테스트
+              알림음 테스트
             </button>
             {notificationScenarios.map((item) => (
               <button
@@ -636,7 +641,6 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
           {ttsTestStatus && (
             <div role="status" className="notification-event-trace">
               <span>{ttsTestStatus}</span>
-              {ttsTestFallback && <span>대체 엔진 사용 · {ttsTestFallback}</span>}
             </div>
           )}
           <button
@@ -664,7 +668,7 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
                 <Icon name="info" size={14} />
                 수신 시뮬레이션은 현재 선택된 탭에만 전달합니다.
               </span>
-              <span>Mock 게시글 생성 → 450 m 접근 이벤트 → 음성 1회 · 카드 유지</span>
+              <span>Mock 게시글 생성 → 450 m 접근 이벤트 → 알림음 1회 · 카드 유지 · 읽기는 Gleo 요청</span>
               <b>수신 {receivedCount}건</b>
             </div>
             <div className="demo-options">
@@ -785,7 +789,7 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
           <b>01</b>주행 제한 ON → 블랙아이스 수신
         </span>
         <span>
-          <b>02</b>탭 전환 → 기존 카드 복구 · 중복 음성 없음
+          <b>02</b>탭 전환 → 기존 카드 복구 · 중복 알림음 없음
         </span>
         <span>
           <b>03</b>주행 제한 OFF → 커뮤니티 목록

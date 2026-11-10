@@ -8,7 +8,7 @@
 - `git fetch origin` 후 로컬 HEAD와 `origin/main`이 모두 `29088171d6d94bfb982f64ccb4b067766a397347`임을 확인했습니다.
 - 작업 시작 시 이미 수정된 7개 파일을 백업한 후 그 위에 필요한 변경을 추가했습니다.
 - 기존 미추적 `android/app/src/main/assets/web/` 디렉터리는 보존했습니다. Gradle은 `app/build/generated/webAssets`에 현재 웹 코드를 빌드합니다.
-- Gleo Action 처리 코드와 `schema.json`은 기존 구현을 사용합니다. `GleoReportAction.java`의 작업 전후 SHA-256은 `BCC2F22F4E9EB63C9E489349F0CADAB473AA40AB9E6973CAB4C741519E344AE4`로 일치합니다.
+- 초기 TTS 수정 단계에서는 Gleo Action 처리 코드와 `schema.json`을 기존 구현으로 유지했습니다. 이후 추가한 실시간 수신 제보 읽기는 아래 별도 항목에 기록했습니다. `GleoReportAction.java`의 작업 전후 SHA-256은 `BCC2F22F4E9EB63C9E489349F0CADAB473AA40AB9E6973CAB4C741519E344AE4`로 일치합니다.
 - 변경 파일은 로컬에 준비되어 있습니다. GitHub 반영은 검토 및 승인 후 진행합니다.
 
 ## 음성 실행 흐름
@@ -174,3 +174,52 @@ GAZEE의 WebView·음성 큐·Android 대체 엔진을 제외하고, Pleos TextT
 영어 시험에서는 DONE 이벤트와 RMS 갱신 4회를 확인했으나 AudioTrack 관련 오류도 있어 실제 영어 음성 출력 성공으로 판정하지 않았습니다. 한국어 ON_DEVICE 재생은 해결되지 않았습니다. 현재 실패를 모든 언어와 모든 Pleos 환경에 일반화할 수 없습니다.
 
 별도 음성 모델 도입은 사용자가 추후 판단하기로 했습니다. 추가 기능 구현을 종료하고 임시 AVD를 정리했으며 원래 AVD로 복귀했습니다.
+## Gleo 실시간 수신 제보 읽기 시연
+
+사용자가 녹음 재생 대신 수신 글마다 실제 Gleo 응답을 원한다고 확인하여 `GAZEE_READ_RECEIVED_REPORT` Action을 추가했습니다. `GleoReportAction.java`, `MainActivity.java`, `schema.json`, `src/App.tsx`를 수정했습니다. 위에 기록된 초기 GleoReportAction 해시 일치는 이 추가 구현 전 단계의 검증 결과입니다.
+
+일반 Assist 호출 후 Callback 보내기는 Sleeping 상태에서 거절됐습니다. 에뮬레이터 명령으로 Gleo를 ListeningPassive 상태로 연 뒤 Callback을 보낸 시험도 거절됐습니다. 현재 시험에서 동작한 경로는 다음과 같습니다.
+
+뒤차 450m 카드 수신 → PC 도우미가 수신 이벤트 감지 → 동일한 읽기 요청 한 문장을 가상 마이크로 입력 → Gleo가 새 읽기 Action 호출 → GAZEE가 고정된 수신 ID의 실제 제보를 반환 → Gleo가 실시간 음성 응답 생성·재생.
+
+앞차의 실제 Gleo 등록 제보를 뒤차로 넘긴 시험에서 인천대로 제보를 읽었습니다. 이어 교통 제보 두 번과 주차 제보 한 번을 연속 수신한 시험에서는 교통과 주차를 각각 한 번씩 읽었습니다. 교통 읽기 요청 중 주차 글이 새로 들어와도 반환하는 제보 ID를 고정하여 순서와 내용이 일치했습니다.
+
+실제 수집된 Gleo 응답은 다음과 같습니다.
+
+- “가지 앱에서 방금 받은 도로 정보를 알려드릴게요. 전방 약 450미터, 성수대교 진입 구간에 교통 정체 제보가 있습니다.”
+- “가지 앱에서 방금 받은 도로 정보를 알려드릴게요. 전방 약 450미터, 성수 공영주차장에 여유 공간이 있다는 제보가 있습니다.”
+
+입력 음성은 읽기 요청 한 문장으로 고정되며 제보 본문을 포함하지 않습니다. 각 응답의 내용은 앱이 실제 수신 데이터에서 조회해 전달합니다. 두 응답의 MP3 재생 완료와 에뮬레이터 출력 오디오를 확인했습니다. 프론트 Gleo 등록 완료 응답도 다시 확인했고, APK 빌드·설치와 기존 테스트 26개가 통과했습니다.
+
+이 기능은 Windows PC 시연 도우미, ADB, WebView 디버깅, 인증된 에뮬레이터 gRPC, Gleo 네트워크가 필요한 개발 시연입니다. APK 단독 무인 자동 호출은 검증되지 않았으며 실제 차량 P에서만 시험했습니다. 기존 CarUxRestrictions 검사와 Gleo 서명 권한 검사는 유지했습니다. 읽기 Action은 새 게시글을 등록하지 않습니다.
+## 2026-11-11 최신 동작: 알림음 수신 + 사용자 요청 시 Gleo 읽기
+
+이 절이 현재 수신 동작이다. 이전 ON_DEVICE/Android TTS 자동 낭독 및 PC 자동 Gleo 호출 실험은 과거 검증 기록이다.
+
+### 구현
+
+- 450m 수신은 기존 카드와 600ms 알림음만 실행한다. `NotificationChime.java`는 AudioTrack PCM과 USAGE_NOTIFICATION/SONIFICATION, 일시적 오디오 포커스를 사용한다. 시작·재생 위치 완료 이벤트를 JS로 반환하며, 포커스 거절·시간 초과·중단은 오류로 처리한다. 주행 UX 제한, 화면 이탈, 마이크 시작 시 중단한다. 추가 권한이나 서비스 서명 우회는 없다.
+- `notificationChime.ts`는 GazeeChime 브리지를 사용한다. 웹 미리보기는 Web Audio 파형을 재생하며 미지원/자동재생 제한을 성공으로 처리하지 않는다. 이 경로는 TTS를 호출하지 않는다.
+- `useNotificationDelivery.ts`는 ID 중복 방지, 범주/거리 우선순위 큐를 유지하며 알림음으로 수신을 알린다. 탭 전환·토글 켜기는 재생을 반복하지 않는다. 음성 제보/마이크 세션 중에는 신규 알림음을 대기시킨다.
+- 카드에는 Gleo 요청 예시를 표시하고, 실패/중단 시 알림음 재시도만 제공한다. 제어판의 버튼은 '알림음 테스트'다. 설정은 '수신 알림음'이며 Gleo 읽기 요청과 독립적이다.
+- Gleo CREATE/READ Action과 서명 권한 보호는 유지한다. READ는 가장 최근 수신 제보를 반환한다. 사용자 요청 예시는 “글레오, 지금 가지 앱에서 방금 받은 도로 제보를 알려줘.”이다. '가지'는 schema의 호출명이다.
+- 이전 PC 도우미용 수신 이벤트와 대상 고정 이벤트 연결은 제거했다. APK가 Gleo를 자동 호출하지 않는다. 기존 PleosSpeech 진단 코드는 보존했지만 현재 수신/테스트 버튼에서 호출하지 않는다.
+
+### 최종 검증 결과
+
+- npm run build, TypeScript --noEmit, Node 테스트 31개 모두 성공.
+- Windows Android Studio JBR를 사용하는 build-apk.ps1 -Install 성공, emulator-5554 사용자 10에 설치 및 실행.
+- 최종 APK SHA256: 09CB1110FC69413B31599C255ED00C7EB4601CD7ED2163084866E6CBF588E587.
+- 최종 APK 앞차 Gleo CREATE 수신 및 등록 성공 콜백 확인. 이전 녹음에서도 실제 등록 완료 응답을 캡처했다.
+- 뒤차 850m에서는 카드 없음. 450m에서 원래 게시글 ID/제목을 유지한 카드 표시, AudioTrack started/done 각 1회 확인. 탭 왕복·동일 제보 재접근 후에도 이벤트 수 2개 유지.
+- 최종 APK 현재 프로세스에서 제보 수신 시 GazeeSpeech.speak/Pleos TTS 호출 없음. 자동 Gleo 도우미 프로세스 없음.
+- 알림음을 OFF한 상태에서 사용자의 읽기 요청을 Gleo에 전달하자 READ Action 성공, 실제 수신한 '인천대로 진입 지점이 막히고 있음'이 응답에 포함됐다. Gleo 출력: “가지 앱에서 받은 도로 제보를 알려드릴게요. 전방 약 450미터, 앞차 제보입니다. 인천대로 진입 지점이 막히고 있음.” MP3 재생 complete와 출력 PCM을 확인했다.
+- Gleo 재검증 중 STT 서버 NETWORK_ERROR 1회 발생. 재요청에서 위 성공을 확인했다. 네트워크 오류를 앱 등록/읽기 성공으로 간주하지 않았다.
+- 알림음 ON 복구 후 '알림음 테스트' 버튼의 AudioTrack started/done와 완료 상태 확인.
+- 출력 녹음은 작업 공간 roadie-demo/gazee-rear-chime.wav 및 gazee-rear-requested-gleo.wav에 저장했다. Gleo 요청 테스트는 Windows 합성 음성을 에뮬레이터 마이크에 입력한 것이다. Gleo 응답 음성은 에뮬레이터의 실제 출력이며, Windows TTS로 대체하지 않았다. Gleo 호출창은 테스트에서 명시적으로 열었으며 실제 핫워드 검출 자체를 검증한 것은 아니다.
+
+### 검증 범위
+
+실제 차량 상태 P에서 앱 내부의 주행 모드와 앞차/뒤차 역할·거리·게시글 공유를 시뮬레이션했다. 실제 두 차량 간 통신, 실제 주행 시 허용 범위, 생산 차량 스피커 출력은 검증하지 않았다. 기존 CarUxRestrictions 보호를 유지했다. Gleo 읽기는 Gleo 서비스/네트워크 상태의 영향을 받는다. 게시글 정리와 차량 근거는 기존 Mock 동작이다.
+
+참조: https://developer.android.com/reference/android/media/AudioTrack , https://developer.android.com/reference/android/media/AudioAttributes#USAGE_NOTIFICATION

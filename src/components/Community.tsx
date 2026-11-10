@@ -255,7 +255,7 @@ export function AISummaryToggle({ enabled, onChange }: { enabled: boolean; onCha
   return (
     <button
       role="switch"
-      aria-label="AI 게시글 제목 읽기"
+      aria-label="새 제보 수신 알림음"
       aria-checked={enabled}
       onClick={onChange}
       className={`toggle ${enabled ? "on" : ""}`}

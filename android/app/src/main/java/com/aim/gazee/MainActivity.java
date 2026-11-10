@@ -45,6 +45,7 @@ public final class MainActivity extends Activity {
     private Car car;
     private CarUxRestrictionsManager restrictionsManager;
     private PleosSpeech speech;
+    private NotificationChime chime;
     private PleosMic microphone;
     // Defined by the Gleo package as a signature permission and granted to its service.
     private static final String GLEO_ACTION_PERMISSION = "ai.umos.gleo.permission.APP_ACTION";
@@ -78,10 +79,13 @@ public final class MainActivity extends Activity {
         setContentView(root);
 
         speech = new PleosSpeech(this, this::dispatchSpeechEvent);
+        chime = new NotificationChime(this, this::dispatchChimeEvent);
         microphone = new PleosMic(this, this::dispatchMicEvent);
-        gleo = new GleoReportAction(this, this::dispatchGleoReport);
+        gleo = new GleoReportAction(this, this::dispatchGleoReport, this::dispatchGleoRead);
         IntentFilter gleoActions = new IntentFilter(GleoReportAction.ACTION);
         gleoActions.addAction(getPackageName() + "." + GleoReportAction.ACTION);
+        gleoActions.addAction(GleoReportAction.READ_ACTION);
+        gleoActions.addAction(getPackageName() + "." + GleoReportAction.READ_ACTION);
         if (Build.VERSION.SDK_INT >= 33) {
             registerReceiver(gleoReceiver, gleoActions, GLEO_ACTION_PERMISSION, null,
                     Context.RECEIVER_EXPORTED);
@@ -123,6 +127,7 @@ public final class MainActivity extends Activity {
             }
         });
         webView.addJavascriptInterface(new SpeechInterface(), "GazeeSpeech");
+        webView.addJavascriptInterface(new ChimeInterface(), "GazeeChime");
         webView.addJavascriptInterface(new MicrophoneInterface(), "GazeeMic");
         webView.addJavascriptInterface(new GleoInterface(), "GazeeGleo");
         webView.loadUrl(PAGE_URL);
@@ -193,6 +198,7 @@ public final class MainActivity extends Activity {
         gleo.dispatch(canInteract && foreground);
         if (!canInteract) {
             speech.stop();
+            chime.stop();
             microphone.interrupt();
             lockScreen.setText(state == null
                     ? "차량 상태를 확인할 수 없어요.\n시연은 주차 상태에서 시작해 주세요."
@@ -203,6 +209,12 @@ public final class MainActivity extends Activity {
     private void dispatchGleoReport(String id, String report) {
         String detail = "{id:" + JSONObject.quote(id) + ",body:" + JSONObject.quote(report) + "}";
         webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('gazee-gleo-report',{detail:"
+                + detail + "}))", null);
+    }
+
+    private void dispatchGleoRead(String id) {
+        String detail = "{id:" + JSONObject.quote(id) + "}";
+        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('gazee-gleo-read',{detail:"
                 + detail + "}))", null);
     }
 
@@ -219,6 +231,11 @@ public final class MainActivity extends Activity {
         @JavascriptInterface
         public void complete(String id, boolean success) {
             runOnUiThread(() -> gleo.finish(id, success));
+        }
+
+        @JavascriptInterface
+        public void completeRead(String id, String speech) {
+            runOnUiThread(() -> gleo.finishRead(id, speech));
         }
     }
 
@@ -254,6 +271,7 @@ public final class MainActivity extends Activity {
             return;
         }
         speech.stop();
+        chime.stop();
         microphone.listen(id);
     }
 
@@ -293,6 +311,29 @@ public final class MainActivity extends Activity {
         }
     }
 
+    private void dispatchChimeEvent(String id, String phase, String message) {
+        if (webView == null) return;
+        Log.i(LOG_TAG, "Notification chime " + phase + ": " + message);
+        String event = "{id:" + JSONObject.quote(id) + ",phase:" + JSONObject.quote(phase)
+                + ",message:" + JSONObject.quote(message) + "}";
+        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('gazee-chime',{detail:"
+                + event + "}))", null);
+    }
+
+    private final class ChimeInterface {
+        @JavascriptInterface
+        public void play(String id) {
+            runOnUiThread(() -> {
+                if (webView == null) return;
+                if (!foreground || !canInteract) {
+                    dispatchChimeEvent(id, "error", "차량 주행 제한이 풀리면 알림음을 사용할 수 있어요.");
+                } else if (id != null && id.length() <= 80) chime.play(id);
+            });
+        }
+        @JavascriptInterface
+        public void cancel(String id) { runOnUiThread(() -> chime.cancel(id)); }
+    }
+
     private final class SpeechInterface {
         @JavascriptInterface
         public void speak(String id, String text) {
@@ -328,6 +369,7 @@ public final class MainActivity extends Activity {
         foreground = false;
         microphone.interrupt();
         speech.stop();
+        chime.stop();
         super.onPause();
     }
 
@@ -342,6 +384,7 @@ public final class MainActivity extends Activity {
         }
         if (car != null) car.disconnect();
         speech.stop();
+        chime.stop();
         microphone.close();
         pendingMicId = null;
         unregisterReceiver(gleoReceiver);
@@ -349,6 +392,7 @@ public final class MainActivity extends Activity {
         webView.removeJavascriptInterface("GazeeGleo");
         webView.removeJavascriptInterface("GazeeMic");
         webView.removeJavascriptInterface("GazeeSpeech");
+        webView.removeJavascriptInterface("GazeeChime");
         ((FrameLayout) webView.getParent()).removeView(webView);
         webView.destroy();
         webView = null;

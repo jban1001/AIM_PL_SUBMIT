@@ -14,9 +14,8 @@ export function VoiceNotificationCard({
   onPlay: () => void;
 }) {
   const playing = playback.status === "playing";
-  const completed = playback.status === "played";
   const pending = playback.status === "queued";
-  const failed = playback.status === "blocked" || playback.status === "unsupported";
+  const failed = playback.status === "blocked" || playback.status === "unsupported" || playback.status === "cancelled";
   return (
     <section
       className="voice-notification"
@@ -35,7 +34,7 @@ export function VoiceNotificationCard({
         <div className={`notification-audio ${playing ? "is-speaking" : ""}`}>
           <div className="notification-audio-heading">
             <Icon name="speaker" size={18} />
-            <span>{playback.engine ? `음성 안내 · ${playback.engine}` : "음성 안내"}</span>
+            <span>새 제보 도착</span>
             {playing && (
               <div className="notification-wave" aria-hidden="true">
                 {[12, 22, 15, 29, 19, 25, 12].map((height, i) => (
@@ -44,31 +43,21 @@ export function VoiceNotificationCard({
               </div>
             )}
           </div>
-          {playback.fallbackReason && (
-            <p className="notification-mock-note">대체 엔진 사용 · {playback.fallbackReason}</p>
-          )}
-          <p className="notification-quote">“{notification.speech}”</p>
+          <p className="notification-quote">“글레오, 지금 가지 앱에서 방금 받은 도로 제보를 알려줘.”</p>
+          <p className="notification-mock-note">Gleo에게 요청하면 가장 최근에 받은 제보를 읽어드려요.</p>
           <div className="notification-playback">
             <span role="status">
               <span className={`status-dot ${playing ? "" : "muted"}`} />
               {playback.detail}
             </span>
-            <button
+            {failed && <button
               className="secondary-button"
               onClick={onPlay}
               disabled={!enabled || playing || pending}
             >
-              <Icon name={completed ? "check" : "speaker"} size={15} />
-              {completed
-                ? "다시 듣기"
-                : playing
-                  ? "안내 중"
-                  : pending
-                    ? "준비 중"
-                    : failed
-                      ? "다시 시도"
-                      : "음성 듣기"}
-            </button>
+              <Icon name="speaker" size={15} />
+              알림음 재시도
+            </button>}
           </div>
         </div>
       </div>

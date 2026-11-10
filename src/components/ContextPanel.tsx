@@ -21,7 +21,7 @@ export function ContextPanel({
   ).size;
   const active = enabled && titleCount > 0;
   return (
-    <aside className="context-panel" aria-label="주행 제한 전용 AI 제목 읽기">
+    <aside className="context-panel" aria-label="새 제보 수신 알림음 설정">
       <section className={`summary-panel ${enabled ? "" : "summary-disabled"}`}>
         <div className="summary-top">
           <div className="summary-icon">
@@ -32,9 +32,9 @@ export function ContextPanel({
         <h2>
           눈은 도로에,
           <br />
-          <span>소식은 목소리로.</span>
+          <span>새 소식은 알림음으로.</span>
         </h2>
-        <p className="summary-description">수신한 제보를 ID별로 한 번만 자동 안내해요.</p>
+        <p className="summary-description">새 제보마다 짧은 알림음을 한 번 재생해요.</p>
         <div className="audio-visualizer" aria-hidden="true">
           {Array.from({ length: 35 }, (_, i) => (
             <i
@@ -49,13 +49,13 @@ export function ContextPanel({
         <div className="summary-status" role="status">
           <span className={`status-dot ${!active ? "muted" : ""}`} />
           {!enabled
-            ? "제보 음성 안내 꺼짐"
+            ? "수신 알림음 꺼짐"
             : offline
-              ? "오프라인 · 받은 제보 안내"
+              ? "오프라인 · 기존 수신 정보 유지"
               : titleCount === 0
-                ? "안내할 게시글이 없습니다"
-                : "제보 음성 안내 켜짐"}
-          <span>MOCK TTS</span>
+                ? "새 제보 수신 대기"
+                : "수신 알림음 켜짐"}
+          <span>알림음</span>
         </div>
         <div className="summary-transcript">
           <span className="small-label">
@@ -65,14 +65,14 @@ export function ContextPanel({
           <p>
             {enabled
               ? titleCount === 0
-                ? "현재 커뮤니티에 새로운 게시글이 등록되면 제목 안내를 준비합니다."
-                : "새 제보가 도착했을 때만 자동으로 안내합니다. 탭 변경이나 토글 켜기만으로 기존 제보를 다시 읽지 않습니다."
-              : "음성 안내를 켜면 새로 수신하는 제보를 안내합니다. 기존 제보는 메시지의 시연 음성 재생 버튼으로 시작하세요."}
+                ? "새 제보가 도착하면 알림음과 카드를 표시합니다."
+                : "탭 변경이나 알림음 켜기만으로 기존 제보의 알림음을 반복하지 않습니다."
+              : "알림음 설정은 새 수신에만 적용돼요. Gleo에게 제보 읽기를 요청하는 기능은 계속 사용할 수 있어요."}
           </p>
         </div>
         <p className="mock-caption">
-          브라우저 TTS로 Mock 문장을 읽습니다. 미지원 시 버튼으로 무음 시연합니다. Pleos 연동은
-          없습니다.
+          내용을 들으려면 “글레오, 지금 가지 앱에서 방금 받은 도로 제보를 알려줘”라고 말해 주세요.
+          Gleo 읽기는 Pleos 앱에서 제공하며 웹 미리보기에서는 사용할 수 없어요.
         </p>
       </section>
     </aside>

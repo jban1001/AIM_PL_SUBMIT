@@ -50,12 +50,12 @@ export function DrivingRestrictionPanel({
           <div className="notification-empty-icon">
             <Icon name="speaker" size={30} />
           </div>
-          <span className="eyebrow">음성 안내 준비됨</span>
+          <span className="eyebrow">제보 알림 준비됨</span>
           <h2>새로운 제보를 기다리고 있어요</h2>
           <p>
             주변 도로의 새로운 소식을
             <br />
-            화면과 음성으로 안내해 드립니다.
+            카드와 알림음으로 알려드려요. 내용은 Gleo에게 물어보세요.
           </p>
           <span className="notification-waiting">
             <span className="status-dot" />
@@ -90,7 +90,7 @@ export function DrivingRestrictionPanel({
         <details className="reading-settings">
           <summary>
             <Icon name="speaker" size={14} />
-            음성 안내 설정 · {enabled ? "ON" : "OFF"}
+            수신 알림음 · {enabled ? "ON" : "OFF"}
             <Icon name="down" size={13} />
           </summary>
           <ContextPanel
@@ -104,7 +104,7 @@ export function DrivingRestrictionPanel({
       </div>
       <div className="policy-note">
         <Icon name="shield" size={15} />
-        자동 음성·주행 중 탭 터치는 시연 전용입니다. Pleos 정책 검증 및 실제 차량 연동 전
+        주행 중 탭 터치는 시연 전용입니다. Pleos 정책 검증 및 실제 차량 연동 전
         상태입니다.
       </div>
     </section>

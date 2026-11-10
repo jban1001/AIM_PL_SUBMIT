@@ -6,15 +6,13 @@ import {
   type MockNotificationData,
   type TTSPlaybackState,
 } from "../domain/notifications";
-import { MockTTSError, playMockTTS } from "../services/mockTTS";
+import { NotificationChimeError, playNotificationChime } from "../services/notificationChime";
 
 const idle: TTSPlaybackState = { status: "idle", detail: "새 제보를 기다리고 있어요." };
 export function useNotificationDelivery({
-  restricted,
   enabled,
   paused,
 }: {
-  restricted: boolean;
   enabled: boolean;
   paused: boolean;
 }) {
@@ -28,7 +26,7 @@ export function useNotificationDelivery({
   const allowed = useRef(false);
   allowed.current = enabled && !paused;
   const automatic = useRef(false);
-  automatic.current = restricted && enabled;
+  automatic.current = enabled;
   const generation = useRef(0);
   const alive = useRef(true);
   function update(id: string, value: TTSPlaybackState) {
@@ -42,38 +40,31 @@ export function useNotificationDelivery({
     const controller = new AbortController();
     const epoch = generation.current;
     active.current = { id, controller };
-    let fallbackReason: string | undefined;
-    void playMockTTS(item.notification.speech, {
+    void playNotificationChime({
       signal: controller.signal,
-      manual: item.manual,
       onStart: (engine) => {
         if (alive.current && epoch === generation.current)
-          update(id, { status: "playing", engine, fallbackReason, detail: `음성 안내 중 · ${engine}` });
+          update(id, { status: "playing", engine, detail: "새 제보 알림음 재생 중" });
       },
-      onProgress: (detail) => {
-        if (alive.current && epoch === generation.current)
-          update(id, { status: "queued", detail, fallbackReason });
-      },
-      onFallback: (reason) => { fallbackReason = reason; },
     })
       .then((engine) => {
         if (alive.current && epoch === generation.current)
-          update(id, { status: "played", engine, fallbackReason, detail: `음성 안내 완료 · ${engine}` });
+          update(id, { status: "played", engine, detail: "알림음 전달 완료 · 제보 읽기는 Gleo에게 요청하세요." });
       })
       .catch((error) => {
         if (!alive.current || epoch !== generation.current) return;
         if (controller.signal.aborted)
           update(id, {
             status: "cancelled",
-            detail: "안내 중단 · 필요한 경우 버튼으로 시작하세요.",
+            detail: "알림음 중단 · 필요하면 알림음을 재시도하세요.",
           });
         else
           update(id, {
             status:
-              error instanceof MockTTSError && error.code === "unsupported"
+              error instanceof NotificationChimeError && error.code === "unsupported"
                 ? "unsupported"
                 : "blocked",
-            detail: error instanceof Error ? error.message : "시연 음성 재생 버튼을 눌러 주세요.",
+            detail: error instanceof Error ? error.message : "알림음 재시도 버튼을 눌러 주세요.",
           });
       })
       .finally(() => {
@@ -91,7 +82,7 @@ export function useNotificationDelivery({
       queue.current.some((item) => item.notification.post.id === id)
     )
       return;
-    update(id, { status: "queued", detail: "음성 안내를 준비하고 있어요." });
+    update(id, { status: "queued", detail: "새 제보 알림음을 준비하고 있어요." });
     queue.current.push({ notification, manual });
     queue.current.sort((a, b) => compareNotificationPriority(a.notification, b.notification));
     pump();
@@ -106,30 +97,30 @@ export function useNotificationDelivery({
     seen.current.add(id);
     if (automatic.current) enqueue(notification, false);
     else
-      update(id, { status: "muted", detail: "자동 안내 대기 없음 · 버튼으로 시작할 수 있어요." });
+      update(id, { status: "muted", detail: "수신 알림음 꺼짐 · 제보는 Gleo에게 읽어달라고 요청하세요." });
   }
-  function playManual(notification: MockNotificationData) {
+  function retryChime(notification: MockNotificationData) {
     if (!allowed.current) return;
     seen.current.add(notification.post.id);
     enqueue(notification, true);
   }
   useEffect(() => {
-    if (!enabled || !restricted) {
+    if (!enabled) {
       active.current?.controller.abort();
       for (const item of queue.current)
         update(item.notification.post.id, {
           status: "cancelled",
-          detail: "자동 안내가 중단됐어요. 다시 듣기 버튼을 사용할 수 있어요.",
+          detail: "알림음이 중단됐어요. 알림음 재시도 버튼을 사용할 수 있어요.",
         });
       queue.current = [];
     } else if (paused) {
-      // Do not speak over a Gleo / microphone session. A newly received report
+      // Do not play a chime over a report / microphone session. A newly received report
       // remains queued and is delivered when that session finishes.
       active.current?.controller.abort();
     } else {
       pump();
     }
-  }, [restricted, enabled, paused]);
+  }, [enabled, paused]);
   useEffect(() => {
     alive.current = true;
     return () => {
@@ -139,5 +130,5 @@ export function useNotificationDelivery({
       queue.current = [];
     };
   }, []);
-  return { history, playback, receive, playManual, stateFor: (id: string) => playback[id] ?? idle };
+  return { history, playback, receive, retryChime, stateFor: (id: string) => playback[id] ?? idle };
 }

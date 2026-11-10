@@ -23,6 +23,19 @@
           ]
         }
       }
+    },
+    {
+      "type": "function",
+      "function": {
+        "name": "GAZEE_READ_RECEIVED_REPORT",
+        "component": "service",
+        "description": "Returns the most recently received road-condition report near the driver.",
+        "parameters": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        }
+      }
     }
   ]
 }
