@@ -1,0 +1,106 @@
+import type { ReportSession } from "../hooks/useReportFlow";
+import { Icon } from "./Icon";
+
+export function VoiceReport({
+  session,
+  community,
+  onRetry,
+  onCancel,
+}: {
+  session: ReportSession;
+  community: string;
+  onRetry: () => void;
+  onCancel: () => void;
+}) {
+  const failed = ["stt-error", "insufficient", "ai-error"].includes(session.phase);
+  const processing = session.phase === "processing";
+  const success = session.phase === "success";
+  return (
+    <section className={`voice-report ${failed ? "voice-failed" : ""}`} aria-label="음성 제보">
+      <div className="voice-topline">
+        <span className="target-badge">
+          <Icon name="pin" size={15} />
+          등록 대상 · {community}
+        </span>
+        <span className="mock-badge">{session.voiceInput === "gleo" ? "Gleo Action" : session.voiceInput === "mic" ? "실제 마이크" : "MOCK STT"}</span>
+      </div>
+      <div className={`voice-orb ${session.phase === "listening" ? "listening" : ""}`}>
+        <Icon name={success ? "check" : processing ? "spark" : failed ? "info" : "mic"} size={37} />
+      </div>
+      <span className="eyebrow">VOICE REPORT</span>
+      <h2 role="status">
+        {success
+          ? "제보가 등록되었어요."
+          : processing
+            ? "제보를 정리하는 중이에요"
+            : failed
+              ? session.error
+              : "듣고 있어요"}
+      </h2>
+      <p className="voice-subtitle">
+        {success
+          ? "등록 대상 커뮤니티에만 추가했어요."
+          : processing
+            ? "원본 발화·모의 차량 데이터·유사 제보를 한 번에 처리해요."
+            : failed
+              ? "유효한 제보가 확보되기 전에는 게시하지 않습니다."
+              : "지금 보이는 도로 상황을 편하게 말해 주세요."}
+      </p>
+      {session.phase === "listening" && (
+        <div className="voice-wave" aria-hidden="true">
+          {Array.from({ length: 33 }, (_, i) => (
+            <i
+              key={i}
+              style={{ height: 10 + Math.sin(i * 1.7) ** 2 * 39, animationDelay: `${i * 0.06}s` }}
+            />
+          ))}
+        </div>
+      )}
+      {!success && (
+        <div className="recognized-text">
+          <span>{processing ? "처리 중인 원본 발화" : "인식된 발화"}</span>
+          <p>{session.body || "발화를 기다리고 있어요…"}</p>
+        </div>
+      )}
+      {processing && (
+        <div className="processing-steps">
+          <span>
+            <Icon name="check" size={14} />
+            원본 확보
+          </span>
+          <span>
+            <Icon name="check" size={14} />
+            입력 준비
+          </span>
+          <span className="current">
+            <span className="button-spinner" />
+            Gemini Mock · 1회
+          </span>
+        </div>
+      )}
+      {failed && (
+        <div className="voice-actions">
+          <button className="secondary-button" onClick={onCancel}>
+            취소
+          </button>
+          <button className="primary-button" onClick={onRetry}>
+            <Icon name="refresh" size={17} />
+            다시 시도
+          </button>
+        </div>
+      )}
+      {session.phase === "listening" && (
+        <button className="voice-cancel" onClick={onCancel}>
+          제보 취소
+        </button>
+      )}
+      <p className="mock-caption">
+        {session.voiceInput === "gleo"
+          ? "Gleo Action을 통해 전달된 제보 원문이에요."
+          : session.voiceInput === "mic"
+            ? "기기 내 음성 인식으로 제보 내용을 받아 적어요."
+            : "예시 발화로 음성 인식을 시연합니다."}
+      </p>
+    </section>
+  );
+}

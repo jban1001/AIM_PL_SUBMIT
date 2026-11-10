@@ -1,0 +1,157 @@
+/* Vehicle app presentation. Simulation and delivery logic stay in their components. */
+@layer base {
+  body { background: #e9ebef; color: #22252c; }
+}
+
+.prototype-page { max-width: 1440px; padding: 28px 32px; }
+.prototype-heading { margin-bottom: 22px; }
+.prototype-heading .eyebrow { color: #656975; font-size: 11px; letter-spacing: 1.3px; }
+.prototype-heading h1 { font-size: 22px; margin-top: 5px; }
+.prototype-heading p { font-size: 12px; color: #69707b; }
+.environment-badge { color: #555e69; border-color: #cdd2da; font-size: 11px; letter-spacing: 0; }
+.vehicle-frame { border: 1px solid #d3d7df; border-radius: 18px; background: #f6f7f9; box-shadow: 0 8px 30px #1720330c; }
+.roadtown-panel { background: #f6f7f9; }
+.vehicle-frame .topbar { height: 80px; padding: 0 36px; border-color: #e2e5ea; gap: 24px; }
+.vehicle-frame .wordmark { color: #7045cb; font-size: 29px; letter-spacing: -1.4px; font-weight: 850; }
+.vehicle-frame .topbar-subtitle { font-size: 14px; color: #717681; padding-left: 24px; border-color: #dce0e6; }
+.vehicle-frame .vehicle-status { background: #eef0f3; color: #454b56; font-size: 13px; gap: 9px; padding: 10px 14px; border-radius: 6px; }
+.vehicle-frame .status-dot { background: #298267; }
+.vehicle-frame .status-dot.amber { background: #b77c1e; }
+.vehicle-frame .topbar time { color: #242832; font-size: 22px; font-weight: 650; }
+.vehicle-frame .main-content { padding: 30px 36px 0; }
+.vehicle-frame .page-heading { margin-bottom: 26px; }
+.vehicle-frame .page-heading .eyebrow { color: #737984; font-size: 13px; letter-spacing: 0; font-weight: 600; }
+.vehicle-frame .page-heading h1 { font-size: clamp(26px, 2.4vw, 34px); line-height: 1.35; letter-spacing: -1.3px; margin-top: 8px; }
+.vehicle-frame .page-heading .state-subtitle { color: #6b717c; font-size: 15px; margin-top: 10px; }
+.vehicle-frame .live-badge { border: 0; padding: 0; background: transparent; font-size: 13px; color: #616975; gap: 8px; }
+.vehicle-frame .community-tabs { gap: 6px; padding: 5px; background: #e8ebef; border-radius: 12px; }
+.vehicle-frame .community-tab { border: 1px solid transparent; background: transparent; border-radius: 8px; min-height: 76px; padding: 12px 18px; gap: 13px; }
+.vehicle-frame .community-tab:hover { background: #f2f3f6; }
+.vehicle-frame .community-tab.selected { background: #fff; border-color: #dce0e6; box-shadow: 0 2px 4px #18203308; }
+.vehicle-frame .tab-icon { background: transparent; color: #777f8c; width: 32px; height: 32px; }
+.vehicle-frame .selected .tab-icon { background: transparent; color: #7045cb; }
+.vehicle-frame .community-tab strong { color: #69707b; font-size: 17px; font-weight: 650; }
+.vehicle-frame .community-tab.selected strong { color: #252932; }
+.vehicle-frame .community-tab div > span { color: #7b828c; font-size: 12px; margin-top: 4px; }
+.vehicle-frame .tab-check { display: none; }
+.vehicle-frame .community-description { color: #747c88; font-size: 12px; margin: 16px 2px; gap: 7px; }
+.vehicle-frame .workspace { border-radius: 12px; }
+.vehicle-frame .workspace.has-overlay .workspace-content { filter: none; opacity: 0; pointer-events: none; }
+.vehicle-frame .driving-restriction-panel { background: #252931; border: 1px solid #252931; border-radius: 12px; padding: 24px 28px 16px; min-height: 470px; }
+.vehicle-frame .driving-panel-heading { margin-bottom: 14px; }
+.vehicle-frame .driving-panel-heading > span:first-child { color: #d2d6de; font-size: 14px; gap: 10px; }
+.vehicle-frame .driving-mode-badge { background: #323741; color: #bfc5ce; border: 0; font-size: 12px; padding: 8px 10px; gap: 7px; }
+.vehicle-frame .notification-empty { min-height: 280px; padding: 20px 0 32px; }
+.vehicle-frame .notification-empty-icon { width: 64px; height: 64px; margin-bottom: 22px; color: #c8b5f4; background: #373340; border: 0; border-radius: 18px; box-shadow: none; }
+.vehicle-frame .notification-empty .eyebrow { font-size: 12px; color: #aaa2bc; letter-spacing: 0; font-weight: 500; }
+.vehicle-frame .notification-empty h2 { color: #f5f6f9; font-size: clamp(23px, 2vw, 29px); font-weight: 650; margin-top: 9px; letter-spacing: -.8px; }
+.vehicle-frame .notification-empty p { color: #aeb5c0; font-size: 15px; line-height: 1.75; margin-top: 12px; }
+.vehicle-frame .notification-waiting { margin-top: 20px; font-size: 12px; color: #aeb5c0; gap: 8px; }
+.vehicle-frame .notification-waiting .status-dot { width: 6px; height: 6px; background: #84bda5; }
+.vehicle-frame .driving-panel-bottom { padding: 18px 0 4px; border-top: 1px solid #414650; align-items: center; gap: 24px; }
+.vehicle-frame .voice-command-reminder { display: grid; grid-template-columns: 40px 1fr; column-gap: 12px; row-gap: 4px; color: #f1f2f5; }
+.vehicle-frame .voice-command-reminder > svg { grid-row: span 2; width: 40px; height: 40px; padding: 10px; background: #41404e; border-radius: 50%; color: #cfbef0; }
+.vehicle-frame .voice-command-reminder > .voice-command-label { color: #b1b7c2; font-size: 12px; width: auto; margin: 0; }
+.vehicle-frame .voice-command-reminder strong { font-size: 17px; font-weight: 550; }
+.vehicle-frame .reading-settings > summary { color: #e0e3e9; font-size: 13px; min-height: 48px; gap: 9px; }
+.vehicle-frame .reading-settings > .context-panel { background: white; border-radius: 10px; }
+.vehicle-frame .driving-restriction-panel > .policy-note { background: transparent; border: 0; padding: 0; margin: 16px 0 0; color: #969eac; font-size: 11px; line-height: 1.6; }
+.vehicle-frame .notification-arrival { margin-bottom: 16px; }
+.vehicle-frame .notification-arrival > span:first-child { color: #e9c684; font-size: 15px; }
+.vehicle-frame .notification-arrival > span:first-child svg { color: #e9c684; }
+.vehicle-frame .notification-arrival .mock-badge { background: #363b45; color: #b9c0cd; border: 0; font-size: 10px; }
+.vehicle-frame .notification-message { border: 1px solid #4c5260; border-radius: 10px; background: #30353e; box-shadow: none; }
+.vehicle-frame .notification-message .notification-post { background: transparent; border-color: #484f5b; padding: 22px 24px; }
+.vehicle-frame .notification-message .notification-post h3 { color: #f7f8fa; font-size: 27px; line-height: 1.5; }
+.vehicle-frame .notification-message .post-time { color: #bbc2cd; font-size: 13px; }
+.vehicle-frame .notification-message .post-evidence { color: #bdc4d0; font-size: 13px; }
+.vehicle-frame .notification-message .post-evidence span { color: #929dad; }
+.vehicle-frame .notification-message .category { font-size: 13px; padding: 6px 10px; }
+.vehicle-frame .notification-audio { background: #383d48; padding: 18px 24px; }
+.vehicle-frame .notification-audio-heading { color: #d1c1f1; }
+.vehicle-frame .notification-audio-heading > span { font-size: 13px; letter-spacing: 0; }
+.vehicle-frame .notification-quote { color: #e2e6ee; font-size: 17px; line-height: 1.7; }
+.vehicle-frame .notification-playback > span { font-size: 12px; color: #afb8c6; }
+.vehicle-frame .notification-playback .secondary-button { background: #4c5261; color: #f3f4f8; border-color: #62697a; font-size: 13px; padding: 12px 18px; min-height: 48px; }
+.vehicle-frame .notification-mock-note { color: #a6aebb; font-size: 11px; margin-bottom: 16px; }
+.vehicle-frame .feed-panel { border: 1px solid #dce1e7; border-radius: 12px; box-shadow: none; background: #fff; }
+.vehicle-frame .feed-heading { padding: 24px; border-color: #e6e9ee; }
+.vehicle-frame .feed-heading h2 { color: #282c35; font-size: 21px; }
+.vehicle-frame .feed-heading > div > span { color: #737b87; font-size: 12px; margin-top: 6px; }
+.vehicle-frame .primary-button { background: #7045cb; color: #fff; border: 0; border-radius: 8px; min-height: 50px; padding: 12px 20px; font-size: 16px; font-weight: 600; box-shadow: none; }
+.vehicle-frame .primary-button:hover { background: #5d36b0; }
+.vehicle-frame .new-posts { color: #6740b5; background: #f3effb; border: 0; border-radius: 6px; font-size: 14px; padding: 14px 18px; }
+.vehicle-frame .post-card { border-radius: 0; border: 0; border-bottom: 1px solid #e7eaf0; padding: 23px 24px; box-shadow: none; }
+.vehicle-frame .post-card:hover { background: #fafbfc; box-shadow: none; transform: none; }
+.vehicle-frame .post-card h3 { color: #252a33; font-size: 20px; line-height: 1.6; font-weight: 600; }
+.vehicle-frame .post-meta { margin-bottom: 12px; }
+.vehicle-frame .post-time { font-size: 13px; color: #7c8490; }
+.vehicle-frame .category { font-size: 12px; border-radius: 4px; }
+.vehicle-frame .post-evidence { font-size: 13px; color: #717986; margin-top: 12px; }
+.vehicle-frame .post-evidence p > span { color: #8a919b; }
+.vehicle-frame .post-scroll { padding: 0; }
+.vehicle-frame .load-more { font-size: 14px; color: #737b88; min-height: 52px; }
+.vehicle-frame .feed-footer { font-size: 11px; color: #7c8490; border-color: #e7eaf0; padding: 14px 24px; }
+.vehicle-frame .app-footer { padding: 17px 0; font-size: 11px; color: #7f8691; }
+.vehicle-frame .app-footer > span:last-child { font-size: 10px; color: #7f8691; letter-spacing: .7px; }
+.simulation-console { border-radius: 12px; border-color: #d3d8e1; margin-top: 20px; }
+.console-top { padding: 18px 22px; gap: 16px; }
+.console-label h2 { color: #4d5562; font-size: 14px; }
+.console-label p { color: #777f8c; font-size: 10px; }
+.console-icon { color: #737c8c; background: #f2f4f7; border-color: #e0e4eb; }
+.console-details { background: #f8f9fb; border-color: #e3e7ee; }
+.notification-event-trace > span, .notification-event-trace b { color: #737b88; }
+.receive-scenario-button { color: #6541a7; background: #f0ebf8; border-color: #dfd5ee; font-size: 12px; min-height: 44px; }
+.reset-demo-button { color: #666f7d; font-size: 12px; min-height: 44px; }
+.vehicle-control > span, .settings-toggle { color: #737b88; font-size: 11px; }
+.segmented { background: #f0f1f5; border-color: #dce0e7; }
+.segmented button { color: #737b88; font-size: 11px; }
+.segmented button.active { color: #6442a6; }
+.speech-trigger { background: #7045cb; color: white; border-color: #7045cb; min-height: 44px; font-size: 12px; }
+.speech-trigger:not(:disabled):hover { background: #5d36b0; }
+.demo-options label { color: #6a7381; }
+.demo-options select { color: #4d5868; border-color: #dce1e9; }
+
+@media (max-width: 900px) {
+  .prototype-page { padding: 20px; }
+  .vehicle-frame .topbar { padding: 0 24px; }
+  .vehicle-frame .main-content { padding: 24px 24px 0; }
+  .vehicle-frame .community-tab { padding: 12px; gap: 8px; }
+  .vehicle-frame .community-tab strong { font-size: 15px; }
+  .vehicle-frame .community-tab div > span { font-size: 11px; }
+  .vehicle-frame .live-badge { display: none; }
+}
+@media (max-width: 600px) {
+  .prototype-page { padding: 12px; }
+  .prototype-heading { gap: 10px; }
+  .prototype-heading h1 { font-size: 19px; }
+  .prototype-heading .eyebrow { font-size: 9px; }
+  .environment-badge { font-size: 9px; padding: 7px; }
+  .vehicle-frame .topbar { height: 66px; padding: 0 18px; gap: 12px; }
+  .vehicle-frame .topbar-subtitle { display: none; }
+  .vehicle-frame .wordmark { font-size: 24px; }
+  .vehicle-frame .vehicle-status { font-size: 11px; padding: 8px; }
+  .vehicle-frame .topbar time { font-size: 18px; }
+  .vehicle-frame .main-content { padding: 22px 14px 0; }
+  .vehicle-frame .page-heading .state-subtitle { font-size: 13px; }
+  .vehicle-frame .community-tabs { gap: 3px; }
+  .vehicle-frame .community-tab { flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 12px 4px; }
+  .vehicle-frame .community-tab strong { font-size: 13px; }
+  .vehicle-frame .community-tab div > span { display: none; }
+  .vehicle-frame .community-description { font-size: 11px; line-height: 1.6; }
+  .vehicle-frame .driving-restriction-panel { padding: 18px 16px 14px; }
+  .vehicle-frame .driving-panel-heading { gap: 8px; }
+  .vehicle-frame .driving-panel-heading > span:first-child { font-size: 12px; }
+  .vehicle-frame .driving-mode-badge { font-size: 10px; }
+  .vehicle-frame .notification-empty h2 { font-size: 21px; }
+  .vehicle-frame .notification-empty p { font-size: 14px; }
+  .vehicle-frame .driving-panel-bottom { flex-direction: column; align-items: stretch; gap: 12px; }
+  .vehicle-frame .voice-command-reminder strong { font-size: 15px; }
+  .vehicle-frame .notification-message .notification-post { padding: 18px; }
+  .vehicle-frame .notification-message .notification-post h3 { font-size: 22px; }
+  .vehicle-frame .notification-audio { padding: 18px; }
+  .vehicle-frame .notification-quote { font-size: 15px; }
+  .vehicle-frame .notification-playback { flex-wrap: wrap; }
+  .vehicle-frame .app-footer > span:last-child { display: none; }
+  .notification-demo-actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+}

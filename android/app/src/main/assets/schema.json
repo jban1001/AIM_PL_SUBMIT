@@ -1,0 +1,28 @@
+{
+  "packageName": "com.aim.gazee",
+  "appDescription": "A community app for reporting road conditions to nearby drivers.",
+  "invokeWord": "가지",
+  "version": "0.1.0",
+  "actionCalls": [
+    {
+      "type": "function",
+      "function": {
+        "name": "GAZEE_CREATE_REPORT",
+        "component": "service",
+        "description": "Registers a road condition report that the driver has explicitly asked GAZEE to share.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "report": {
+              "type": "string",
+              "description": "The driver's road condition description, retaining the road name and observed condition."
+            }
+          },
+          "required": [
+            "report"
+          ]
+        }
+      }
+    }
+  ]
+}
