@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  compareNotificationPriority,
   emptyNotificationHistory,
   recordNotification,
   upsertReceivedPost,
@@ -99,9 +100,8 @@ test("브라우저 TTS 어댑터는 Mock 문장을 한 번 전달하고 종료�
         signal: new AbortController().signal,
         manual: false,
         onStart: () => starts++,
-        onSilentFallback: () => assert.fail("unexpected fallback"),
       });
-      assert.equal(result, "spoken");
+      assert.equal(result, "브라우저 TTS");
     },
   );
   assert.equal(calls, 1);
@@ -115,31 +115,19 @@ test("TTS 미지원 시 자동 재생은 실패를 반환하며 임의의 무음
         signal: new AbortController().signal,
         manual: false,
         onStart: () => assert.fail(),
-        onSilentFallback: () => assert.fail(),
       }),
       (error: unknown) => error instanceof MockTTSError && error.code === "unsupported",
     );
   });
 });
-test("미지원 브라우저의 수동 버튼은 명시적 무음 시연을 시작하며 취소할 수 있다", async () => {
-  const controller = new AbortController();
-  let fallback = false;
+test("TTS 미지원 시 수동 재시도도 오류를 반환한다", async () => {
   await withWindow({}, async () => {
-    const promise = playMockTTS("테스트", {
-      signal: controller.signal,
+    await assert.rejects(playMockTTS("테스트", {
+      signal: new AbortController().signal,
       manual: true,
-      onStart: () => assert.fail(),
-      onSilentFallback: () => {
-        fallback = true;
-        queueMicrotask(() => controller.abort());
-      },
-    });
-    await assert.rejects(
-      promise,
-      (error: unknown) => error instanceof Error && error.name === "AbortError",
-    );
+      onStart: () => assert.fail("무음 재생을 성공으로 표시하면 안 된다"),
+    }), (error: unknown) => error instanceof MockTTSError && error.code === "unsupported");
   });
-  assert.equal(fallback, true);
 });
 test("상태 해제·초기화의 AbortSignal은 진행 중 음성을 취소한다", async () => {
   let cancels = 0;
@@ -162,11 +150,95 @@ test("상태 해제·초기화의 AbortSignal은 진행 중 음성을 취소한�
           signal: controller.signal,
           manual: false,
           onStart: () => {},
-          onSilentFallback: () => assert.fail(),
         }),
         (error: unknown) => error instanceof Error && error.name === "AbortError",
       );
     },
   );
+  assert.equal(cancels, 1);
+});
+
+test("대기 제보는 도로 위험, 교통 순서이며 같은 범주는 가까운 거리 우선이다", () => {
+  const base = BlackIceScenario.createEvent("nearby");
+  const parking = { ...base, post: { ...base.post, category: "주차" as const } };
+  const traffic = { ...base, post: { ...base.post, category: "교통" as const } };
+  const closeHazard = { ...base, distanceMeters: 150 };
+  assert.deepEqual([parking, base, traffic, closeHazard].sort(compareNotificationPriority),
+    [closeHazard, base, traffic, parking]);
+});
+
+function nativeWindow(speak: (id: string, text: string, emit: (phase: string, message?: string) => void) => void) {
+  const target = new EventTarget();
+  return Object.assign(target, {
+    GazeeSpeech: {
+      speak(id: string, text: string) {
+        speak(id, text, (phase, message = "") => target.dispatchEvent(
+          new CustomEvent("gazee-speech", { detail: { id, phase, message } }),
+        ));
+      },
+      cancel() {},
+    },
+  });
+}
+
+test("네이티브 TTS는 대체 엔진 진행 상태와 실제 사용 엔진을 반환한다", async () => {
+  const progress: string[] = [];
+  const engines: string[] = [];
+  const failures: string[] = [];
+  const host = nativeWindow((_id, text, emit) => {
+    assert.equal(text, "테스트");
+    emit("fallback", "ON_DEVICE_ENGINE_ERROR");
+    emit("preparing", "Pleos 합성 오류 · ON_DEVICE_ENGINE_ERROR → Android TTS");
+    emit("started", "Android TTS · com.reecedunn.espeak");
+    emit("done", "Android TTS · com.reecedunn.espeak");
+  });
+  await withWindow(host, async () => {
+    const engine = await playMockTTS("테스트", {
+      signal: new AbortController().signal, manual: false,
+      onStart: value => engines.push(value), onProgress: value => progress.push(value),
+      onFallback: value => failures.push(value),
+    });
+    assert.equal(engine, "Android TTS · com.reecedunn.espeak");
+  });
+  assert.equal(progress.length, 1);
+  assert.deepEqual(failures, ["ON_DEVICE_ENGINE_ERROR"]);
+  assert.deepEqual(engines, ["Android TTS · com.reecedunn.espeak"]);
+});
+
+test("재생 시작 없이 완료 이벤트만 받으면 성공으로 처리하지 않는다", async () => {
+  await withWindow(nativeWindow((_id, _text, emit) => emit("done")), async () => {
+    await assert.rejects(playMockTTS("테스트", {
+      signal: new AbortController().signal, manual: false, onStart: () => assert.fail(),
+    }), /재생 시작/);
+  });
+});
+
+test("네이티브 실패 원인을 유지하며 중복 완료 이벤트를 무시한다", async () => {
+  const host = nativeWindow((_id, _text, emit) => {
+    emit("error", "ON_DEVICE_ENGINE_ERROR / 한국어 음성 데이터 없음");
+    emit("done");
+  });
+  await withWindow(host, async () => {
+    await assert.rejects(playMockTTS("테스트", {
+      signal: new AbortController().signal, manual: true, onStart: () => assert.fail(),
+    }), /ON_DEVICE_ENGINE_ERROR \/ 한국어 음성 데이터 없음/);
+  });
+});
+
+test("네이티브 취소 도중 들어오는 동기 오류도 한 번만 정리한다", async () => {
+  const controller = new AbortController();
+  const host = nativeWindow((_id, _text, _emit) => queueMicrotask(() => controller.abort()));
+  let cancels = 0;
+  host.GazeeSpeech.cancel = () => {
+    cancels++;
+    host.dispatchEvent(new CustomEvent("gazee-speech", {
+      detail: {id: "other", phase: "error", message: "취소됨"},
+    }));
+  };
+  await withWindow(host, async () => {
+    await assert.rejects(playMockTTS("테스트", {
+      signal: controller.signal, manual: false, onStart: () => assert.fail(),
+    }), (error: unknown) => error instanceof Error && error.name === "AbortError");
+  });
   assert.equal(cancels, 1);
 });

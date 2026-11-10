@@ -22,8 +22,10 @@ function pleosSpeech(
   bridge: PleosSpeechBridge,
   text: string,
   signal: AbortSignal,
-  onStart: () => void,
-): Promise<void> {
+  onStart: (engine: string) => void,
+  onProgress?: (message: string) => void,
+  onFallback?: (reason: string) => void,
+): Promise<string> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
       reject(new DOMException("Cancelled", "AbortError"));
@@ -31,15 +33,19 @@ function pleosSpeech(
     }
 
     const id = String(++nextSpeechId);
-    let watchdog = setTimeout(timeout, 10_000);
+    let settled = false;
+    let engine = "";
+    let watchdog = setTimeout(timeout, 22_000);
     function finish(error?: Error) {
+      if (settled) return;
+      settled = true;
       clearTimeout(watchdog);
       signal.removeEventListener("abort", abort);
       window.removeEventListener("gazee-speech", receive);
       if (error) {
-        bridge.cancel(id);
+        try { bridge.cancel(id); } catch { /* The bridge may have closed with the activity. */ }
         reject(error);
-      } else resolve();
+      } else resolve(engine);
     }
     function timeout() {
       finish(new MockTTSError("blocked", "Pleos 음성 서비스의 응답이 없어요."));
@@ -55,12 +61,20 @@ function pleosSpeech(
       }>).detail;
       if (requestId !== id) return;
 
-      if (phase === "started") {
+      if (phase === "fallback") {
+        onFallback?.(message);
+      } else if (phase === "preparing") {
+        clearTimeout(watchdog);
+        watchdog = setTimeout(timeout, 22_000);
+        onProgress?.(message);
+      } else if (phase === "started") {
         clearTimeout(watchdog);
         watchdog = setTimeout(timeout, 30_000);
-        onStart();
+        engine = message || "Pleos ON_DEVICE";
+        onStart(engine);
       } else if (phase === "done") {
-        finish();
+        if (!engine) finish(new MockTTSError("blocked", "음성 재생 시작을 확인하지 못했어요."));
+        else finish();
       } else if (phase === "error") {
         finish(new MockTTSError("blocked", message));
       }
@@ -75,7 +89,7 @@ function pleosSpeech(
   });
 }
 
-function browserSpeech(text: string, signal: AbortSignal, onStart: () => void): Promise<void> {
+function browserSpeech(text: string, signal: AbortSignal, onStart: (engine: string) => void): Promise<string> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
       reject(new DOMException("Cancelled", "AbortError"));
@@ -94,6 +108,7 @@ function browserSpeech(text: string, signal: AbortSignal, onStart: () => void): 
     utterance.lang = "ko-KR";
     utterance.rate = 0.95;
     let settled = false;
+    let started = false;
     let watchdog: ReturnType<typeof setTimeout>;
     function finish(error?: Error) {
       if (settled) return;
@@ -106,7 +121,7 @@ function browserSpeech(text: string, signal: AbortSignal, onStart: () => void): 
       if (error) {
         synth.cancel();
         reject(error);
-      } else resolve();
+      } else resolve("브라우저 TTS");
     }
     function abort() {
       finish(new DOMException("Cancelled", "AbortError"));
@@ -114,7 +129,8 @@ function browserSpeech(text: string, signal: AbortSignal, onStart: () => void): 
     signal.addEventListener("abort", abort, { once: true });
     utterance.onstart = () => {
       clearTimeout(watchdog);
-      onStart();
+      started = true;
+      onStart("브라우저 TTS");
       // Do not leave the UI stuck if an engine never emits an end event.
       watchdog = setTimeout(
         () =>
@@ -127,7 +143,9 @@ function browserSpeech(text: string, signal: AbortSignal, onStart: () => void): 
         30_000,
       );
     };
-    utterance.onend = () => finish();
+    utterance.onend = () => finish(started
+      ? undefined
+      : new MockTTSError("blocked", "음성 재생 시작을 확인하지 못했어요."));
     utterance.onerror = () =>
       finish(new MockTTSError("blocked", "음성을 재생하지 못했어요. 시연 버튼을 눌러 주세요."));
     watchdog = setTimeout(
@@ -141,43 +159,18 @@ function browserSpeech(text: string, signal: AbortSignal, onStart: () => void): 
     }
   });
 }
-function silentSimulation(signal: AbortSignal) {
-  return new Promise<void>((resolve, reject) => {
-    if (signal.aborted) {
-      reject(new DOMException("Cancelled", "AbortError"));
-      return;
-    }
-    const timer = setTimeout(() => {
-      signal.removeEventListener("abort", abort);
-      resolve();
-    }, 4200);
-    function abort() {
-      clearTimeout(timer);
-      reject(new DOMException("Cancelled", "AbortError"));
-    }
-    signal.addEventListener("abort", abort, { once: true });
-  });
-}
-// The installed app uses Pleos TTS to read the same simulated report text.
-// When speech is unavailable, only an explicit button starts the labelled silent demo.
+// Play actual audio only. Never mark a silent simulation as successful playback.
 export async function playMockTTS(
   text: string,
   options: {
     signal: AbortSignal;
     manual: boolean;
-    onStart: () => void;
-    onSilentFallback: () => void;
+    onStart: (engine: string) => void;
+    onProgress?: (message: string) => void;
+    onFallback?: (reason: string) => void;
   },
-): Promise<"spoken" | "simulated"> {
-  try {
-    const bridge = typeof window !== "undefined" ? window.GazeeSpeech : undefined;
-    if (bridge) await pleosSpeech(bridge, text, options.signal, options.onStart);
-    else await browserSpeech(text, options.signal, options.onStart);
-    return "spoken";
-  } catch (error) {
-    if (options.signal.aborted || !options.manual) throw error;
-    options.onSilentFallback();
-    await silentSimulation(options.signal);
-    return "simulated";
-  }
+): Promise<string> {
+  const bridge = typeof window !== "undefined" ? window.GazeeSpeech : undefined;
+  if (bridge) return pleosSpeech(bridge, text, options.signal, options.onStart, options.onProgress, options.onFallback);
+  return browserSpeech(text, options.signal, options.onStart);
 }

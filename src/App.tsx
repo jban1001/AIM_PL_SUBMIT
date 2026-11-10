@@ -33,6 +33,7 @@ import {
 } from "./services/mockCommunity";
 import { useReportFlow } from "./hooks/useReportFlow";
 import { listenWithPleos } from "./services/pleosMic";
+import { playMockTTS } from "./services/mockTTS";
 import { validateReportBody, voiceCommandBody } from "./services/reportInput";
 import { useNotificationDelivery } from "./hooks/useNotificationDelivery";
 import {
@@ -100,6 +101,10 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
   const [tts, setTts] = useState(true);
   const [wakeListening, setWakeListening] = useState(false);
   const [wakeStatus, setWakeStatus] = useState("");
+  const [ttsTestStatus, setTtsTestStatus] = useState("");
+  const [ttsTesting, setTtsTesting] = useState(false);
+  const [ttsTestFallback, setTtsTestFallback] = useState("");
+  const ttsTestController = useRef<AbortController | null>(null);
   const [offline, setOffline] = useState(false);
   const [viewState, setViewState] = useState<FeedView>(
     scenario.simulation?.initialView ?? "normal",
@@ -171,7 +176,7 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
   const delivery = useNotificationDelivery({
     restricted: driving,
     enabled: tts,
-    paused: !!speechActive || wakeListening,
+    paused: !!speechActive || wakeListening || ttsTesting,
   });
   const acceptGleo = useEffectEvent((requestId: string, body: string) => {
     if (relay.role !== "front" || !validateReportBody(body)
@@ -352,6 +357,32 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
     setViewState(next.simulation?.initialView ?? "normal");
     setFailAI(next.simulation?.failFirstReport ?? false);
   }
+  function testTtsOutput() {
+    if (ttsTestController.current || busy || wakeListening) return;
+    const controller = new AbortController();
+    ttsTestController.current = controller;
+    setTtsTesting(true);
+    setTtsTestFallback("");
+    setTtsTestStatus("음성 출력 준비 중…");
+    void playMockTTS("가제 음성 테스트입니다. 전방 도로 상황을 알려드립니다.", {
+      signal: controller.signal,
+      manual: true,
+      onProgress: setTtsTestStatus,
+      onFallback: setTtsTestFallback,
+      onStart: (engine) => setTtsTestStatus(`재생 중 · ${engine}`),
+    })
+      .then((engine) => setTtsTestStatus(`음성 재생 완료 · ${engine}`))
+      .catch((error: unknown) => setTtsTestStatus(
+        `음성 실패 · ${error instanceof Error ? error.message : "알 수 없는 오류"}`,
+      ))
+      .finally(() => {
+        if (ttsTestController.current === controller) {
+          ttsTestController.current = null;
+          if (!controller.signal.aborted) setTtsTesting(false);
+        }
+      });
+  }
+  useEffect(() => () => ttsTestController.current?.abort(), []);
   const inPleos = window.GazeeSpeech !== undefined;
   const DemoControls = inPleos ? "details" : "section";
 
@@ -577,6 +608,15 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
             </div>
           </div>
           <div className="notification-demo-actions">
+            <button
+              type="button"
+              className="receive-scenario-button"
+              onClick={testTtsOutput}
+              disabled={ttsTesting || busy || wakeListening}
+            >
+              <Icon name="speaker" size={17} />
+              음성 출력 테스트
+            </button>
             {notificationScenarios.map((item) => (
               <button
                 key={item.id}
@@ -593,6 +633,12 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
               시연 초기화
             </button>
           </div>
+          {ttsTestStatus && (
+            <div role="status" className="notification-event-trace">
+              <span>{ttsTestStatus}</span>
+              {ttsTestFallback && <span>대체 엔진 사용 · {ttsTestFallback}</span>}
+            </div>
+          )}
           <button
             className="speech-trigger"
             disabled={!driving || busy}

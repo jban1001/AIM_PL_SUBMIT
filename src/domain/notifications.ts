@@ -1,4 +1,4 @@
-import type { CommunityId, Post } from "./types.ts";
+import type { Category, CommunityId, Post } from "./types.ts";
 
 export type DrivingRestrictionState = "DRIVING_RESTRICTED" | "UNRESTRICTED";
 export type CommunitySelectionState = CommunityId;
@@ -16,7 +16,6 @@ export type TTSStatus =
   | "muted"
   | "queued"
   | "playing"
-  | "simulating"
   | "played"
   | "blocked"
   | "unsupported"
@@ -24,6 +23,8 @@ export type TTSStatus =
 export interface TTSPlaybackState {
   status: TTSStatus;
   detail: string;
+  engine?: string;
+  fallbackReason?: string;
 }
 export interface ScenarioEventHandler {
   id: string;
@@ -44,6 +45,21 @@ export function makeRearNotification(
     receivedAt: now,
     simulated: true,
   };
+}
+
+const categoryPriority: Record<Category, number> = {
+  "도로 위험": 3,
+  "교통": 2,
+  "주차": 1,
+  "지역 정보": 0,
+  "기타": 0,
+};
+
+// Finish the current sentence, then deliver hazards first and nearer reports next.
+export function compareNotificationPriority(a: MockNotificationData, b: MockNotificationData): number {
+  return categoryPriority[b.post.category] - categoryPriority[a.post.category]
+    || a.distanceMeters - b.distanceMeters
+    || a.receivedAt - b.receivedAt;
 }
 
 export function emptyNotificationHistory(): NotificationHistory {

@@ -13,9 +13,10 @@ export function VoiceNotificationCard({
   enabled: boolean;
   onPlay: () => void;
 }) {
-  const playing = playback.status === "playing" || playback.status === "simulating";
+  const playing = playback.status === "playing";
   const completed = playback.status === "played";
   const pending = playback.status === "queued";
+  const failed = playback.status === "blocked" || playback.status === "unsupported";
   return (
     <section
       className="voice-notification"
@@ -34,7 +35,7 @@ export function VoiceNotificationCard({
         <div className={`notification-audio ${playing ? "is-speaking" : ""}`}>
           <div className="notification-audio-heading">
             <Icon name="speaker" size={18} />
-            <span>{window.GazeeSpeech ? "음성 안내 · Pleos TTS" : "음성 안내"}</span>
+            <span>{playback.engine ? `음성 안내 · ${playback.engine}` : "음성 안내"}</span>
             {playing && (
               <div className="notification-wave" aria-hidden="true">
                 {[12, 22, 15, 29, 19, 25, 12].map((height, i) => (
@@ -43,6 +44,9 @@ export function VoiceNotificationCard({
               </div>
             )}
           </div>
+          {playback.fallbackReason && (
+            <p className="notification-mock-note">대체 엔진 사용 · {playback.fallbackReason}</p>
+          )}
           <p className="notification-quote">“{notification.speech}”</p>
           <div className="notification-playback">
             <span role="status">
@@ -52,16 +56,18 @@ export function VoiceNotificationCard({
             <button
               className="secondary-button"
               onClick={onPlay}
-              disabled={!enabled || playing || pending || completed}
+              disabled={!enabled || playing || pending}
             >
               <Icon name={completed ? "check" : "speaker"} size={15} />
               {completed
-                ? "안내 완료"
+                ? "다시 듣기"
                 : playing
                   ? "안내 중"
                   : pending
                     ? "준비 중"
-                    : "시연 음성 재생"}
+                    : failed
+                      ? "다시 시도"
+                      : "음성 듣기"}
             </button>
           </div>
         </div>

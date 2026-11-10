@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  compareNotificationPriority,
   emptyNotificationHistory,
   recordNotification,
   type MockNotificationData,
@@ -25,7 +26,9 @@ export function useNotificationDelivery({
   const queue = useRef<{ notification: MockNotificationData; manual: boolean }[]>([]);
   const active = useRef<{ id: string; controller: AbortController } | null>(null);
   const allowed = useRef(false);
-  allowed.current = restricted && enabled && !paused;
+  allowed.current = enabled && !paused;
+  const automatic = useRef(false);
+  automatic.current = restricted && enabled;
   const generation = useRef(0);
   const alive = useRef(true);
   function update(id: string, value: TTSPlaybackState) {
@@ -39,27 +42,23 @@ export function useNotificationDelivery({
     const controller = new AbortController();
     const epoch = generation.current;
     active.current = { id, controller };
+    let fallbackReason: string | undefined;
     void playMockTTS(item.notification.speech, {
       signal: controller.signal,
       manual: item.manual,
-      onStart: () => {
+      onStart: (engine) => {
         if (alive.current && epoch === generation.current)
-          update(id, { status: "playing", detail: "음성 안내 중 · Mock TTS" });
+          update(id, { status: "playing", engine, fallbackReason, detail: `음성 안내 중 · ${engine}` });
       },
-      onSilentFallback: () => {
+      onProgress: (detail) => {
         if (alive.current && epoch === generation.current)
-          update(id, { status: "simulating", detail: "브라우저 음성 미지원 · 무음 시연 중" });
+          update(id, { status: "queued", detail, fallbackReason });
       },
+      onFallback: (reason) => { fallbackReason = reason; },
     })
-      .then((result) => {
+      .then((engine) => {
         if (alive.current && epoch === generation.current)
-          update(id, {
-            status: "played",
-            detail:
-              result === "spoken"
-                ? "음성 안내 완료 · 카드는 유지됩니다."
-                : "무음 시연 완료 · 실제 음성은 재생되지 않았습니다.",
-          });
+          update(id, { status: "played", engine, fallbackReason, detail: `음성 안내 완료 · ${engine}` });
       })
       .catch((error) => {
         if (!alive.current || epoch !== generation.current) return;
@@ -87,13 +86,14 @@ export function useNotificationDelivery({
     const id = notification.post.id;
     const status = states.current[id]?.status;
     if (
-      status === "played" ||
+      (!manual && status === "played") ||
       active.current?.id === id ||
       queue.current.some((item) => item.notification.post.id === id)
     )
       return;
     update(id, { status: "queued", detail: "음성 안내를 준비하고 있어요." });
     queue.current.push({ notification, manual });
+    queue.current.sort((a, b) => compareNotificationPriority(a.notification, b.notification));
     pump();
   }
   function receive(notification: MockNotificationData) {
@@ -104,7 +104,7 @@ export function useNotificationDelivery({
     if (seen.current.has(id)) return;
     // Mark at event time, not in a tab/render effect (also safe in StrictMode).
     seen.current.add(id);
-    if (allowed.current) enqueue(notification, false);
+    if (automatic.current) enqueue(notification, false);
     else
       update(id, { status: "muted", detail: "자동 안내 대기 없음 · 버튼으로 시작할 수 있어요." });
   }
@@ -114,15 +114,21 @@ export function useNotificationDelivery({
     enqueue(notification, true);
   }
   useEffect(() => {
-    if (restricted && enabled && !paused) return;
-    active.current?.controller.abort();
-    for (const item of queue.current)
-      update(item.notification.post.id, {
-        status: "cancelled",
-        detail: "자동 안내가 중단됐어요. 카드는 유지됩니다.",
-      });
-    queue.current = [];
-    // Intentionally no playback when restrictions/toggle are re-enabled.
+    if (!enabled || !restricted) {
+      active.current?.controller.abort();
+      for (const item of queue.current)
+        update(item.notification.post.id, {
+          status: "cancelled",
+          detail: "자동 안내가 중단됐어요. 다시 듣기 버튼을 사용할 수 있어요.",
+        });
+      queue.current = [];
+    } else if (paused) {
+      // Do not speak over a Gleo / microphone session. A newly received report
+      // remains queued and is delivered when that session finishes.
+      active.current?.controller.abort();
+    } else {
+      pump();
+    }
   }, [restricted, enabled, paused]);
   useEffect(() => {
     alive.current = true;

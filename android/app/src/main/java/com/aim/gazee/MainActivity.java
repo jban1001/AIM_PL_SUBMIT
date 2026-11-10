@@ -303,6 +303,7 @@ public final class MainActivity extends Activity {
                 } else if (text == null || text.trim().isEmpty() || text.length() > 500) {
                     dispatchSpeechEvent(id, "error", "안내할 문장을 읽을 수 없어요.");
                 } else {
+                    Log.i(LOG_TAG, "GazeeSpeech.speak bridge id=" + id + " length=" + text.length());
                     speech.speak(id, text);
                 }
             });
