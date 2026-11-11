@@ -9,7 +9,7 @@ import android.media.AudioTrack;
 import android.os.Handler;
 import android.os.Looper;
 
-/** A short local notification sound. Never synthesizes or speaks report text. */
+/** Plays the short notification chime. */
 final class NotificationChime {
     interface Events { void emit(String id, String phase, String message); }
     private final AudioManager audio;
@@ -18,7 +18,7 @@ final class NotificationChime {
     private AudioTrack track;
     private AudioFocusRequest focus;
     private String activeId;
-    private final Runnable timeout = () -> finish("error", "알림음 재생 완료를 확인하지 못했어요.");
+    private final Runnable timeout = () -> finish("error", "오디오 재생 완료를 확인하지 못했어요.");
 
     NotificationChime(Context context, Events events) {
         audio = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
@@ -34,7 +34,8 @@ final class NotificationChime {
         try {
             AudioAttributes attributes = new AudioAttributes.Builder()
                     .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build();
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build();
             focus = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
                     .setAudioAttributes(attributes)
                     .setOnAudioFocusChangeListener(change -> {
@@ -81,7 +82,7 @@ final class NotificationChime {
             main.postDelayed(timeout, 3000);
             events.emit(id, "started", "Android AudioTrack");
         } catch (RuntimeException error) {
-            finish("error", "알림음 재생 실패 · " + error.getClass().getSimpleName());
+            finish("error", "오디오 재생 실패 · " + error.getClass().getSimpleName());
         }
     }
 

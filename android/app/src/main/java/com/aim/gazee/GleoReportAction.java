@@ -94,22 +94,15 @@ final class GleoReportAction {
         finish("asking", message, "[{\"missingField\":" + JSONObject.quote(missing) + "}]");
     }
 
-    void finishRead(String id, String title, double distanceMeters) {
+    void finishRead(String id, String announcement) {
         if (!id.equals(requestId) || !READ_ACTION.equals(pendingAction)) return;
-        if (title == null || title.trim().isEmpty() || title.length() > 500) {
+        if (announcement == null || announcement.trim().isEmpty() || announcement.length() > 600) {
             finish("fail", "There is no received road report available to read.", null);
             return;
         }
         try {
-            JSONObject report = new JSONObject()
-                    .put("reportTitle", title)
-                    .put("source", "Driver report")
-                    .put("verified", false);
-            if (Double.isFinite(distanceMeters) && distanceMeters >= 0) {
-                report.put("approximateDistanceMeters", distanceMeters);
-            }
-            finish("success", "The latest driver report is available for a brief, courteous spoken update. "
-                    + "Describe the reported condition in a complete sentence and attribute it to the report.",
+            JSONObject report = new JSONObject().put("announcement", announcement);
+            finish("success", "Read the Korean announcement aloud exactly as supplied, preserving its polite sentence endings.",
                     "[" + report + "]");
         } catch (JSONException error) {
             finish("fail", "The road report could not be read.", null);

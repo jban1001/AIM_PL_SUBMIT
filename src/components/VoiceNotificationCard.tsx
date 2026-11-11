@@ -7,11 +7,13 @@ export function VoiceNotificationCard({
   playback,
   enabled,
   onPlay,
+  readOnly = false,
 }: {
   notification: MockNotificationData;
   playback: TTSPlaybackState;
   enabled: boolean;
   onPlay: () => void;
+  readOnly?: boolean;
 }) {
   const playing = playback.status === "playing";
   const pending = playback.status === "queued";
@@ -31,10 +33,10 @@ export function VoiceNotificationCard({
       </div>
       <div className="notification-message">
         <PostCard post={notification.post} compact />
-        <div className={`notification-audio ${playing ? "is-speaking" : ""}`}>
+        {!readOnly && <div className={`notification-audio ${playing ? "is-speaking" : ""}`}>
           <div className="notification-audio-heading">
             <Icon name="speaker" size={18} />
-            <span>새 제보 도착</span>
+            <span>음성 안내</span>
             {playing && (
               <div className="notification-wave" aria-hidden="true">
                 {[12, 22, 15, 29, 19, 25, 12].map((height, i) => (
@@ -43,8 +45,7 @@ export function VoiceNotificationCard({
               </div>
             )}
           </div>
-          <p className="notification-quote">“글레오, 지금 가지 앱에서 방금 받은 도로 제보를 알려줘.”</p>
-          <p className="notification-mock-note">Gleo에게 요청하면 가장 최근에 받은 제보를 읽어드려요.</p>
+          <p className="notification-quote">“{notification.speech}”</p>
           <div className="notification-playback">
             <span role="status">
               <span className={`status-dot ${playing ? "" : "muted"}`} />
@@ -59,7 +60,7 @@ export function VoiceNotificationCard({
               알림음 재시도
             </button>}
           </div>
-        </div>
+        </div>}
       </div>
       <p className="notification-mock-note">
         <Icon name="info" size={14} />

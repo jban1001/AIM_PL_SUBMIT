@@ -524,6 +524,11 @@
 .delete-post:hover {
   color: #b87575;
 }
+.post-description {
+  margin-top: 6px;
+  font-size: 15px;
+  line-height: 1.5;
+}
 .post-card h3 {
   font-size: 19px;
   font-weight: 550;
@@ -633,6 +638,12 @@
   border-radius: 4px;
   padding: 5px 7px;
   white-space: nowrap;
+}
+.report-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 .target-badge {
   display: inline-flex;

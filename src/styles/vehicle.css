@@ -79,10 +79,14 @@
 .vehicle-frame .notification-arrival { margin-bottom: 16px; }
 .vehicle-frame .notification-arrival > span:first-child { color: #e9c684; font-size: 15px; }
 .vehicle-frame .notification-arrival > span:first-child svg { color: #e9c684; }
+.vehicle-frame .published-report .notification-arrival > span:first-child,
+.vehicle-frame .published-report .notification-arrival > span:first-child svg { color: #a5d6be; }
+.vehicle-frame .published-report .notification-message .notification-post { border-bottom: 0; }
 .vehicle-frame .notification-arrival .mock-badge { background: #363b45; color: #b9c0cd; border: 0; font-size: 10px; }
 .vehicle-frame .notification-message { border: 1px solid #4c5260; border-radius: 10px; background: #30353e; box-shadow: none; }
 .vehicle-frame .notification-message .notification-post { background: transparent; border-color: #484f5b; padding: 22px 24px; }
 .vehicle-frame .notification-message .notification-post h3 { color: #f7f8fa; font-size: 27px; line-height: 1.5; }
+.vehicle-frame .notification-message .post-description { color: #d6dbe5; }
 .vehicle-frame .notification-message .post-time { color: #bbc2cd; font-size: 13px; }
 .vehicle-frame .notification-message .post-evidence { color: #bdc4d0; font-size: 13px; }
 .vehicle-frame .notification-message .post-evidence span { color: #929dad; }

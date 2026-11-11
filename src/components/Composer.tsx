@@ -1,6 +1,7 @@
 import type { ReportSession } from "../hooks/useReportFlow";
 import { VoiceReport } from "./VoiceReport";
 import { Icon } from "./Icon";
+import { CategoryLabel } from "./Community";
 
 export function Composer({
   session,
@@ -39,10 +40,13 @@ export function Composer({
         </div>
         <span className="mock-badge">MOCK AI</span>
       </div>
-      <div className="target-badge">
-        <Icon name="pin" size={15} />
-        등록 대상 · {community}
-        <Icon name="lock" size={13} />
+      <div className="report-tags">
+        {session.simulationCategory && <CategoryLabel category={session.simulationCategory} />}
+        <span className="target-badge">
+          <Icon name="pin" size={15} />
+          등록 대상 · {community}
+          <Icon name="lock" size={13} />
+        </span>
       </div>
       {session.error && (
         <div className="inline-error" role="alert">

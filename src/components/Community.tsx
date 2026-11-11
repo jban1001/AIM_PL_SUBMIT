@@ -13,10 +13,12 @@ export function AppLayout({
   children,
   vehicleState,
   time,
+  readOnly = false,
 }: {
   children: ReactNode;
   vehicleState: VehicleState;
   time: string;
+  readOnly?: boolean;
 }) {
   return (
     <div className="app-shell">
@@ -29,7 +31,7 @@ export function AppLayout({
           <div className="vehicle-status">
             <span className={`status-dot ${vehicleState === "driving" ? "amber" : ""}`} />
             <Icon name="car" size={19} />
-            {vehicleState === "driving"
+            {readOnly ? "읽기 전용" : vehicleState === "driving"
               ? "주행 제한 중"
               : vehicleState === "parked"
                 ? "주차 중"
@@ -124,6 +126,7 @@ export function PostCard({
         </div>
       </div>
       <h3>{post.summary}</h3>
+      {post.description && <p className="post-description">{post.description}</p>}
       {post.evidence && (
         <div className="post-evidence">
           <Icon name="spark" size={15} />
@@ -188,6 +191,7 @@ export function PostList({
   community,
   onRetry,
   onDelete,
+  readOnly = false,
 }: {
   posts: Post[];
   loading: boolean;
@@ -201,6 +205,7 @@ export function PostList({
   community: CommunityId;
   onRetry: () => void;
   onDelete: (id: string) => void;
+  readOnly?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -211,7 +216,7 @@ export function PostList({
       className="post-scroll"
       ref={ref}
       onScroll={(event) => {
-        if (loading || empty) return;
+        if (readOnly || loading || empty) return;
         const el = event.currentTarget;
         onScroll(el.scrollTop);
         if (el.scrollHeight - el.scrollTop - el.clientHeight < 70 && !loading && !empty && !offline)

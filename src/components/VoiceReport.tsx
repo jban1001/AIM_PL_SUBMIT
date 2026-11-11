@@ -1,5 +1,6 @@
 import type { ReportSession } from "../hooks/useReportFlow";
 import { Icon } from "./Icon";
+import { CategoryLabel } from "./Community";
 
 export function VoiceReport({
   session,
@@ -15,14 +16,18 @@ export function VoiceReport({
   const failed = ["stt-error", "insufficient", "ai-error"].includes(session.phase);
   const processing = session.phase === "processing";
   const success = session.phase === "success";
+  const transcript = session.voiceInput === "gleo" ? session.reportDetails?.utterance?.trim() : undefined;
   const micPreparing = session.phase === "listening" && session.voiceInput === "mic" && !session.microphoneReady;
   return (
     <section className={`voice-report ${failed ? "voice-failed" : ""}`} aria-label="음성 제보">
       <div className="voice-topline">
-        <span className="target-badge">
-          <Icon name="pin" size={15} />
-          등록 대상 · {community}
-        </span>
+        <div className="report-tags">
+          {session.simulationCategory && <CategoryLabel category={session.simulationCategory} />}
+          <span className="target-badge">
+            <Icon name="pin" size={15} />
+            등록 대상 · {community}
+          </span>
+        </div>
         <span className="mock-badge">{session.voiceInput === "gleo" ? "Gleo Action" : session.voiceInput === "mic" ? "실제 마이크" : "MOCK STT"}</span>
       </div>
       <div className={`voice-orb ${session.phase === "listening" ? "listening" : ""}`}>
@@ -59,8 +64,8 @@ export function VoiceReport({
       )}
       {!success && (
         <div className="recognized-text">
-          <span>{processing ? "처리 중인 원본 발화" : "인식된 발화"}</span>
-          <p>{session.body || "발화를 기다리고 있어요…"}</p>
+          <span>{session.voiceInput === "gleo" && !transcript ? "GLEO가 전달한 내용" : "인식된 발화"}</span>
+          <p>{transcript || session.body || "발화를 기다리고 있어요…"}</p>
         </div>
       )}
       {processing && session.voiceInput !== "gleo" && (
@@ -97,7 +102,7 @@ export function VoiceReport({
       )}
       <p className="mock-caption">
         {session.voiceInput === "gleo"
-          ? "Gleo Action을 통해 전달된 제보 원문이에요."
+          ? "GLEO가 앱에 전달한 제보예요."
           : session.voiceInput === "mic"
             ? "기기 내 음성 인식으로 제보 내용을 받아 적어요."
             : "예시 발화로 음성 인식을 시연합니다."}

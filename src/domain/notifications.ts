@@ -5,6 +5,7 @@ export type CommunitySelectionState = CommunityId;
 export interface MockNotificationData {
   post: Post;
   speech: string;
+  speechRate?: number;
   distanceMeters: number;
   source: string;
   receivedAt: number;
@@ -35,8 +36,15 @@ export function makeRearNotification(
   frontPost: Post,
   distanceMeters: number,
   now = Date.now(),
+  scenario?: ScenarioEventHandler,
 ): MockNotificationData | null {
-  if (!Number.isFinite(distanceMeters) || distanceMeters < 0 || distanceMeters > 500) return null;
+  if (!Number.isFinite(distanceMeters) || distanceMeters < 0) return null;
+  if (scenario) {
+    const event = scenario.createEvent(frontPost.community, now);
+    if (distanceMeters > event.distanceMeters) return null;
+    return { ...event, post: { ...event.post, id: frontPost.id } };
+  }
+  if (distanceMeters > 500) return null;
   return {
     post: { ...frontPost, authorId: "demo-front-vehicle", simulated: true },
     speech: `전방 약 ${distanceMeters}미터, 앞차 제보입니다. ${frontPost.summary}`,
@@ -55,7 +63,7 @@ const categoryPriority: Record<Category, number> = {
   "기타": 0,
 };
 
-// Finish the current sentence, then deliver hazards first and nearer reports next.
+// Finish the current chime, then alert for hazards first and nearer reports next.
 export function compareNotificationPriority(a: MockNotificationData, b: MockNotificationData): number {
   return categoryPriority[b.post.category] - categoryPriority[a.post.category]
     || a.distanceMeters - b.distanceMeters

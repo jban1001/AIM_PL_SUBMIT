@@ -19,10 +19,11 @@ export function playNotificationChime({ signal, onStart }: {
   if (signal.aborted) return Promise.reject(new DOMException("Cancelled", "AbortError"));
   const bridge = window.GazeeChime;
   if (bridge) return new Promise((resolve, reject) => {
+    const engine = "Android AudioTrack";
     const id = `chime-${Date.now()}-${++sequence}`;
     let settled = false;
     let started = false;
-    const timer = setTimeout(() => finish(new NotificationChimeError("blocked", "알림음 응답이 없어요.")), 4000);
+    const timer = setTimeout(() => finish(new NotificationChimeError("blocked", "오디오 응답이 없어요.")), 4000);
     function finish(error?: Error) {
       if (settled) return;
       settled = true;
@@ -32,20 +33,22 @@ export function playNotificationChime({ signal, onStart }: {
       if (error) {
         try { bridge!.cancel(id); } catch { /* Activity may have closed. */ }
         reject(error);
-      } else resolve("Android AudioTrack");
+      } else resolve(engine);
     }
     function abort() { finish(new DOMException("Cancelled", "AbortError")); }
     function receive(event: Event) {
       const value = (event as CustomEvent<{id: string; phase: string; message: string}>).detail;
       if (value.id !== id) return;
-      if (value.phase === "started") { started = true; onStart("Android AudioTrack"); }
+      if (value.phase === "started") { started = true; onStart(engine); }
       else if (value.phase === "done") {
         finish(started ? undefined : new NotificationChimeError("blocked", "알림음 재생 시작을 확인하지 못했어요."));
       } else if (value.phase === "error") finish(new NotificationChimeError("blocked", value.message));
     }
     window.addEventListener("gazee-chime", receive);
     signal.addEventListener("abort", abort, {once: true});
-    try { bridge.play(id); } catch { finish(new NotificationChimeError("blocked", "알림음을 호출하지 못했어요.")); }
+    try {
+      bridge.play(id);
+    } catch { finish(new NotificationChimeError("blocked", "오디오를 호출하지 못했어요.")); }
   });
   if (typeof window.AudioContext !== "function")
     return Promise.reject(new NotificationChimeError("unsupported", "이 환경은 알림음을 지원하지 않아요."));

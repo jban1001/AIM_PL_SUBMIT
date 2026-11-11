@@ -3,6 +3,8 @@ import { ParkingScenario } from "./parking.ts";
 import { TrafficScenario } from "./traffic.ts";
 import { LocalScenario } from "./local.ts";
 import type { ScenarioEventHandler } from "../../domain/notifications.ts";
+import { blackIce } from "../blackIce.ts";
+import { congestion } from "../congestion.ts";
 
 // reportMode
 // - "voice": 주행 중 '제보할게' 음성 제보 (주행 제한 ON/OFF 모두)
@@ -16,13 +18,14 @@ export interface SimulationTab {
   reportMode: ReportMode;
   // 제보자 시연 속도 배율 (1 = 기본, 0.5 = 절반 속도). 수신 음성 속도는 각 수신 시나리오 파일에서 지정합니다.
   speed?: number;
+  gleoExample?: string;
 }
 export const DICTATION_REQUIRES_STOPPED = "이 시나리오는 주행 제한 OFF 상태에서 테스트할 수 있습니다.";
 export const simulationTabs: SimulationTab[] = [
   { id: "parking", name: "주차", reportScenarioId: "parking", notification: ParkingScenario, reportMode: "dictation", speed: 0.5 },
-  { id: "traffic", name: "교통", reportScenarioId: "congestion", notification: TrafficScenario, reportMode: "voice" },
-  { id: "local", name: "지역", reportScenarioId: "local", notification: LocalScenario, reportMode: "dictation" },
-  { id: "road-hazard", name: "도로 위험", reportScenarioId: "black-ice", notification: BlackIceScenario, reportMode: "voice" },
+  { id: "traffic", name: "교통", reportScenarioId: "congestion", notification: TrafficScenario, reportMode: "voice", speed: 0.5, gleoExample: `지금 가지 앱에 제보해 줘. ${congestion.exampleInput}` },
+  { id: "local", name: "지역", reportScenarioId: "local", notification: LocalScenario, reportMode: "dictation", speed: 0.5 },
+  { id: "road-hazard", name: "도로 위험", reportScenarioId: "black-ice", notification: BlackIceScenario, reportMode: "voice", speed: 0.5, gleoExample: `지금 가지 앱에 제보해 줘. ${blackIce.exampleInput}` },
 ];
 
 // Extend event rules here; the shared delivery UI never needs scenario branches.

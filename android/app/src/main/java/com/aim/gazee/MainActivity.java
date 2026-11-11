@@ -9,6 +9,7 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
@@ -39,11 +40,24 @@ public final class MainActivity extends Activity {
     private static final String PAGE_URL = "https://" + WEB_HOST + WEB_ROOT + "index.html?host=pleos";
     private static final String LOG_TAG = "GazeePleos";
     private static final int MICROPHONE_PERMISSION = 41;
+    private static final int SPEED_PERMISSION = 42;
+    // During recording, the in-app demo controls own the simulated driving mode.
+    private static final boolean FOLLOW_EMULATOR_MOTION = false;
+    private static final String DEMO_ROLE_ACTION = "com.aim.gazee.DEMO_ROLE";
+
+    private enum Screen { NORMAL, LIMITED, DRIVING, LOCKED, UNAVAILABLE }
 
     private WebView webView;
     private TextView lockScreen;
     private Car car;
     private CarUxRestrictionsManager restrictionsManager;
+    private CarUxRestrictions currentRestrictions;
+    private boolean emulatorDemo;
+    private VehicleMotion motion;
+    private Screen screen;
+    private int renderGeneration;
+    private boolean vehiclePageReady;
+    private boolean speedPermissionRequested;
     private PleosSpeech speech;
     private NotificationChime chime;
     private PleosMic microphone;
@@ -56,6 +70,32 @@ public final class MainActivity extends Activity {
             if (!canInteract || !foreground) return;
             gleo.accept(intent);
             gleo.dispatch(true);
+        }
+    };
+    private final BroadcastReceiver demoRoleReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            if (!isOrderedBroadcast() || !DEMO_ROLE_ACTION.equals(intent.getAction())) return;
+            String role = intent.getStringExtra("role");
+            if (!"front".equals(role) && !"rear".equals(role)) return;
+            if (!vehiclePageReady || !foreground || webView == null
+                    || screen == null || screen == Screen.LOCKED || screen == Screen.UNAVAILABLE) {
+                setResultData("app-not-ready");
+                return;
+            }
+
+            PendingResult reply = goAsync();
+            webView.evaluateJavascript("window.selectGazeeDemoRole?.(" + JSONObject.quote(role) + ")", result -> {
+                if (JSONObject.quote("ok").equals(result)) {
+                    reply.setResultCode(RESULT_OK);
+                    reply.setResultData(role);
+                } else if (JSONObject.quote("report-required").equals(result)) {
+                    reply.setResultData("report-required");
+                } else {
+                    reply.setResultData("app-not-ready");
+                }
+                reply.finish();
+            });
         }
     };
     private String pendingMicId;
@@ -91,6 +131,19 @@ public final class MainActivity extends Activity {
                     Context.RECEIVER_EXPORTED);
         } else {
             registerReceiver(gleoReceiver, gleoActions, GLEO_ACTION_PERMISSION, null);
+        }
+        emulatorDemo = (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0
+                && Build.DEVICE.startsWith("crp_avd_");
+        if (emulatorDemo) {
+            if (FOLLOW_EMULATOR_MOTION) motion = new VehicleMotion(this::applyRestrictions);
+            IntentFilter demoRole = new IntentFilter(DEMO_ROLE_ACTION);
+            // The ADB shell can select a demo role without enabling driver input.
+            if (Build.VERSION.SDK_INT >= 33) {
+                registerReceiver(demoRoleReceiver, demoRole, Manifest.permission.DUMP, null,
+                        Context.RECEIVER_EXPORTED);
+            } else {
+                registerReceiver(demoRoleReceiver, demoRole, Manifest.permission.DUMP, null);
+            }
         }
         configureWebView();
         connectToVehicle();
@@ -130,6 +183,7 @@ public final class MainActivity extends Activity {
         webView.addJavascriptInterface(new ChimeInterface(), "GazeeChime");
         webView.addJavascriptInterface(new MicrophoneInterface(), "GazeeMic");
         webView.addJavascriptInterface(new GleoInterface(), "GazeeGleo");
+        if (emulatorDemo) webView.addJavascriptInterface(new VehicleInterface(), "GazeeVehicle");
         webView.loadUrl(PAGE_URL);
     }
 
@@ -157,6 +211,7 @@ public final class MainActivity extends Activity {
                         if (isDestroyed()) return;
                         if (!ready) {
                             restrictionsManager = null;
+                            if (motion != null) motion.close();
                             updateRestrictions(null);
                             return;
                         }
@@ -166,6 +221,10 @@ public final class MainActivity extends Activity {
                             if (restrictionsManager != null) {
                                 restrictionsManager.registerListener(
                                         value -> runOnUiThread(() -> updateRestrictions(value)));
+                            }
+                            if (motion != null) {
+                                motion.connect(connected, checkSelfPermission(Car.PERMISSION_SPEED)
+                                        == PackageManager.PERMISSION_GRANTED);
                             }
                             refreshRestrictions();
                         } catch (RuntimeException error) {
@@ -190,19 +249,106 @@ public final class MainActivity extends Activity {
     }
 
     private void updateRestrictions(CarUxRestrictions state) {
+        currentRestrictions = state;
+        applyRestrictions();
+    }
+
+    private void applyRestrictions() {
         if (isDestroyed() || webView == null) return;
-        canInteract = state != null && !state.isRequiresDistractionOptimization()
-                && state.getActiveRestrictions() == 0;
-        webView.setVisibility(canInteract ? View.VISIBLE : View.INVISIBLE);
-        lockScreen.setVisibility(canInteract ? View.GONE : View.VISIBLE);
+        boolean platformAllowsInteraction = currentRestrictions != null
+                && !currentRestrictions.isRequiresDistractionOptimization()
+                && currentRestrictions.getActiveRestrictions() == 0
+                && (motion == null || !motion.isInNonParkGear());
+        Screen next = Screen.UNAVAILABLE;
+        if (currentRestrictions != null) {
+            int contentLimits = CarUxRestrictions.UX_RESTRICTIONS_LIMIT_CONTENT
+                    | CarUxRestrictions.UX_RESTRICTIONS_LIMIT_STRING_LENGTH;
+            if (emulatorDemo && !FOLLOW_EMULATOR_MOTION) {
+                next = Screen.NORMAL;
+            } else if (motion != null && motion.hasDriveSpeed()
+                    && (currentRestrictions.getActiveRestrictions() & contentLimits) == 0) {
+                next = motion.isDrivingAtThreshold() ? Screen.DRIVING : Screen.LIMITED;
+            } else {
+                next = platformAllowsInteraction ? Screen.NORMAL : Screen.LOCKED;
+            }
+        }
+
+        canInteract = next == Screen.NORMAL;
+        if (screen != next) {
+            screen = next;
+            Log.i(LOG_TAG, "Vehicle screen: " + next);
+            if (!canInteract) {
+                speech.stop();
+                chime.stop();
+                microphone.interrupt();
+            }
+            renderScreen();
+        }
         gleo.dispatch(canInteract && foreground);
-        if (!canInteract) {
-            speech.stop();
-            chime.stop();
-            microphone.interrupt();
-            lockScreen.setText(state == null
-                    ? "차량 상태를 확인할 수 없어요.\n시연은 주차 상태에서 시작해 주세요."
-                    : "주행 중 이용이 제한돼요.\n주행 제한이 풀리면 시연을 계속할 수 있어요.");
+        maybeRequestSpeedPermission();
+    }
+
+    private void renderScreen() {
+        final int generation = ++renderGeneration;
+        final Screen target = screen;
+        boolean normal = target == Screen.NORMAL;
+        // Hide the parked UI immediately, before waiting for the WebView to switch views.
+        webView.setVisibility(View.INVISIBLE);
+        // The emulator's driving page renders only demo tabs and role selection.
+        boolean demoTouch = motion != null && target == Screen.DRIVING;
+        webView.setOnTouchListener(normal || demoTouch ? null : (view, event) -> true);
+        webView.setFocusable(normal);
+        webView.setFocusableInTouchMode(normal);
+        webView.setImportantForAccessibility(normal
+                ? View.IMPORTANT_FOR_ACCESSIBILITY_AUTO : View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
+        if (!normal && webView.getWindowToken() != null) {
+            webView.clearFocus();
+            ((android.view.inputmethod.InputMethodManager) getSystemService(INPUT_METHOD_SERVICE))
+                    .hideSoftInputFromWindow(webView.getWindowToken(), 0);
+        }
+        lockScreen.setVisibility(View.VISIBLE);
+        lockScreen.setText(target == Screen.UNAVAILABLE
+                ? "차량 주행 제한 상태를 확인하고 있어요."
+                : "주행 중 이용이 제한돼요.");
+        if (!emulatorDemo) {
+            showWebView(normal);
+            return;
+        }
+        if (!vehiclePageReady || target == null || target == Screen.UNAVAILABLE || target == Screen.LOCKED) return;
+        String mode = JSONObject.quote(target.name());
+        webView.evaluateJavascript("window.applyGazeeVehicleScreen?.(" + mode + ") === true", result -> {
+            if (webView != null && renderGeneration == generation && "true".equals(result)) {
+                webView.postVisualStateCallback(generation, new WebView.VisualStateCallback() {
+                    @Override
+                    public void onComplete(long requestId) {
+                        if (webView != null && renderGeneration == requestId) showWebView(true);
+                    }
+                });
+            }
+        });
+    }
+
+    private void showWebView(boolean show) {
+        webView.setVisibility(show ? View.VISIBLE : View.INVISIBLE);
+        lockScreen.setVisibility(show ? View.GONE : View.VISIBLE);
+    }
+
+    private void maybeRequestSpeedPermission() {
+        if (motion == null || !foreground || !canInteract || !vehiclePageReady || speedPermissionRequested
+                || checkSelfPermission(Car.PERMISSION_SPEED) == PackageManager.PERMISSION_GRANTED) return;
+        speedPermissionRequested = true;
+        requestPermissions(new String[]{Car.PERMISSION_SPEED}, SPEED_PERMISSION);
+    }
+
+    private final class VehicleInterface {
+        @JavascriptInterface
+        public void ready() {
+            runOnUiThread(() -> {
+                if (webView == null) return;
+                vehiclePageReady = true;
+                renderScreen();
+                maybeRequestSpeedPermission();
+            });
         }
     }
 
@@ -239,8 +385,8 @@ public final class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void completeRead(String id, String title, double distanceMeters) {
-            runOnUiThread(() -> gleo.finishRead(id, title, distanceMeters));
+        public void completeRead(String id, String announcement) {
+            runOnUiThread(() -> gleo.finishRead(id, announcement));
         }
     }
 
@@ -291,6 +437,12 @@ public final class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int code, String[] permissions, int[] results) {
         super.onRequestPermissionsResult(code, permissions, results);
+        if (code == SPEED_PERMISSION) {
+            if (motion != null && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+                motion.subscribeSpeed();
+            }
+            return;
+        }
         if (code != MICROPHONE_PERMISSION || pendingMicId == null) return;
         if (results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
             resumePendingMic();
@@ -329,12 +481,13 @@ public final class MainActivity extends Activity {
         @JavascriptInterface
         public void play(String id) {
             runOnUiThread(() -> {
-                if (webView == null) return;
+                if (webView == null || id == null || id.length() > 80) return;
                 if (!foreground || !canInteract) {
-                    dispatchChimeEvent(id, "error", "차량 주행 제한이 풀리면 알림음을 사용할 수 있어요.");
-                } else if (id != null && id.length() <= 80) chime.play(id);
+                    dispatchChimeEvent(id, "error", "차량 주행 제한이 풀리면 수신 오디오를 사용할 수 있어요.");
+                } else chime.play(id);
             });
         }
+
         @JavascriptInterface
         public void cancel(String id) { runOnUiThread(() -> chime.cancel(id)); }
     }
@@ -387,6 +540,8 @@ public final class MainActivity extends Activity {
                 Log.w(LOG_TAG, "Could not remove vehicle listener", error);
             }
         }
+        if (emulatorDemo) unregisterReceiver(demoRoleReceiver);
+        if (motion != null) motion.close();
         if (car != null) car.disconnect();
         speech.stop();
         chime.stop();
@@ -394,6 +549,7 @@ public final class MainActivity extends Activity {
         pendingMicId = null;
         unregisterReceiver(gleoReceiver);
         gleo.close();
+        webView.removeJavascriptInterface("GazeeVehicle");
         webView.removeJavascriptInterface("GazeeGleo");
         webView.removeJavascriptInterface("GazeeMic");
         webView.removeJavascriptInterface("GazeeSpeech");

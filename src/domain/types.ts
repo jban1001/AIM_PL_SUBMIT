@@ -5,26 +5,26 @@ export type VehicleState = "parked" | "stopped" | "driving";
 export type InputMode = "touch" | "voice";
 export type SpeechFault = "none" | "stt" | "insufficient";
 export const CURRENT_USER_ID = "demo-driver";
-export interface Post {
+export interface Post extends AIResult {
   id: string;
   community: CommunityId;
-  category: Category;
-  summary: string;
-  evidence: string;
   createdAt: number;
   simulated: true;
   authorId?: string;
   source?: InputMode;
   originalBody?: string;
+  scriptedScenarioId?: string;
 }
 export interface AIResult {
   summary: string;
+  description?: string;
   evidence: string;
   category: Category;
 }
 export interface Scenario {
   id: string;
   name: string;
+  category: Category;
   exampleInput: string;
   vehicleData: Record<string, string | number>;
   examples: AIResult[];

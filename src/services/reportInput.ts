@@ -23,7 +23,7 @@ export function normalizeGleoReport(body: string): string {
     text = text
       .replace(/^(?:글레오|글래오|gleo)(?:야|아)?(?=$|[\s,，:])\s*[,，:]?\s*/iu, "")
       .replace(new RegExp(`^(?:(?:지금|방금)[\\s,，:]*)?${app}(?=$|[\\s,，:])[\\s,，:]*`, "iu"), "");
-    text = voiceCommandBody(text) ?? text;
+    text = voiceCommandBody(text) ?? text.replace(/^제\s*보\s*해\s*(?:줘(?:요)?|저)[\s,.!?…]*/u, "");
     text = text.replace(new RegExp(
       `(?:\\s+${app})?\\s*(?:(?:도로|교통)\\s*)?(?:제보(?:를)?\\s*)?(?:제보|등록|공유)(?:를|을)?\\s*해\\s*(?:줘(?:요)?|주세요|주실래요|줄래(?:요)?)[\\s.!。]*$`,
       "iu",
@@ -74,13 +74,16 @@ export function reportInputError(body: string, details?: GleoReportDetails): {
 } | null {
   const text = normalizeReportBody(body);
   const source = details?.utterance === undefined ? text : normalizeGleoReport(details.utterance);
-  const location = details?.location.trim() ?? namedLocation(text);
+  const location = [details?.location.trim() ?? "", namedLocation(text)].find((value) => {
+    const key = compact(value);
+    return concrete(value) && !vaguePlaces.has(key)
+      && compact(text).includes(key) && compact(source).includes(key)
+      && (!observation.test(value) || !!namedLocation(value));
+  }) ?? "";
   const locationKey = compact(location);
-  const hasLocation = concrete(location) && !vaguePlaces.has(locationKey)
-    && (!details || (compact(text).includes(locationKey) && compact(source).includes(locationKey)
-      && (!observation.test(location) || !!namedLocation(location))));
+  const hasLocation = !!location;
   const remainder = location ? text.replace(location, "") : text;
-  const condition = details?.condition.trim();
+  const condition = details?.condition.trim() || undefined;
   // Structured Gleo fields allow observations outside the local vocabulary.
   // Reject missing values, a repeated place name, or a bare request to report.
   const conditionText = condition === undefined ? remainder : condition.replace(location, "");
@@ -98,6 +101,14 @@ export function reportInputError(body: string, details?: GleoReportDetails): {
   if (!hasLocation) return { missing: "location", message: "어느 도로나 장소인지 알려 주세요." };
   if (!hasCondition) return { missing: "condition", message: "그 장소에서 어떤 상황인지 알려 주세요." };
   return null;
+}
+
+export function matchesDemoUtterance(body: string, example: string) {
+  const normalized = compact(normalizeGleoReport(body));
+  const exampleText = normalizeGleoReport(example);
+  // Gleo may end a scripted utterance after its first complete sentence.
+  const firstSentence = compact(exampleText.split(/[.!?。！？]/u, 1)[0]);
+  return !!normalized && (normalized === compact(exampleText) || normalized === firstSentence);
 }
 
 export function validateGleoReportTitle(body: string) {

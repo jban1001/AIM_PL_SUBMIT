@@ -9,6 +9,7 @@ const exampleInput =
 export const LOCAL_SUMMARY = "미추홀 구청 근처 국밥집 추천 제보";
 export const local: Scenario = {
   id: "local",
+  category: "지역 정보",
   name: "지역 제보",
   exampleInput,
   vehicleData: {

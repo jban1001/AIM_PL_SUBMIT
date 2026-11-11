@@ -1,6 +1,7 @@
 import {
   CURRENT_USER_ID,
   mockConfig,
+  type Category,
   type CommunityId,
   type InputMode,
   type Post,
@@ -64,12 +65,24 @@ export interface ReportAIInput {
 }
 export interface ReportOptions {
   reportDetails?: GleoReportDetails;
+  scriptedExample?: boolean;
+  simulationCategory?: Category;
   vehicleDataAvailable?: boolean;
   similarPostsAvailable?: boolean;
   source?: InputMode;
   onRequest?: (input: ReportAIInput) => void;
   aiDelayMs?: number;
 }
+export function scenarioReportInputError(
+  scenario: Scenario,
+  body: string,
+  details?: GleoReportDetails,
+  scriptedExample = false,
+) {
+  if (scriptedExample && normalizeReportBody(body) === normalizeReportBody(scenario.exampleInput)) return null;
+  return reportInputError(body, details);
+}
+
 export async function processReport(
   scenario: Scenario,
   body: string,
@@ -80,7 +93,7 @@ export async function processReport(
 ): Promise<Post> {
   if (!body.trim()) throw new Error("내용을 입력해 주세요.");
   const originalBody = normalizeReportBody(body);
-  const issue = reportInputError(originalBody, options.reportDetails);
+  const issue = scenarioReportInputError(scenario, originalBody, options.reportDetails, options.scriptedExample);
   if (issue) throw new Error(issue.message);
   // Snapshot inputs at report time, before the simulated single Gemini call.
   const input: ReportAIInput = {
@@ -97,6 +110,7 @@ export async function processReport(
   const result = scenario.process(input.body, input);
   return {
     ...result,
+    category: options.simulationCategory ?? result.category,
     summary: result.summary.replace(/\s+/g, " ").trim(),
     evidence: Object.keys(input.vehicleData).length === 0 ? "" : result.evidence,
     id: `report-${crypto.randomUUID()}`,
@@ -106,6 +120,9 @@ export async function processReport(
     authorId: CURRENT_USER_ID,
     source: options.source ?? "touch",
     originalBody,
+    ...(options.scriptedExample && originalBody === normalizeReportBody(scenario.exampleInput)
+      ? { scriptedScenarioId: scenario.id }
+      : {}),
   };
 }
 

@@ -3,9 +3,14 @@ import assert from "node:assert/strict";
 import {
   compareNotificationPriority,
   emptyNotificationHistory,
+  makeRearNotification,
   recordNotification,
   upsertReceivedPost,
 } from "../src/domain/notifications.ts";
+import { BLACK_ICE_SUMMARY, BLACK_ICE_EVIDENCE } from "../src/scenarios/blackIce.ts";
+import { LocalScenario } from "../src/scenarios/notifications/local.ts";
+import { ParkingScenario } from "../src/scenarios/notifications/parking.ts";
+import { TrafficScenario } from "../src/scenarios/notifications/traffic.ts";
 import { BlackIceScenario } from "../src/scenarios/notifications/blackIce.ts";
 import { communities } from "../src/domain/types.ts";
 import { MockTTSError, playMockTTS } from "../src/services/mockTTS.ts";
@@ -20,17 +25,34 @@ test("탭 이름과 순서는 내 차·목적지·방향 중심이며 기존 com
     ["nearby", "destination", "direction"],
   );
 });
-test("블랙아이스 이벤트는 고정 ID, 450m, 3분 전 제보와 정확한 음성 문장을 만든다", () => {
+test("블랙아이스 이벤트는 고정 ID, 100m, 3분 전 제보와 정확한 음성 문장을 만든다", () => {
   const event = BlackIceScenario.createEvent("nearby", 1_000_000);
-  assert.equal(event.distanceMeters, 450);
+  assert.equal(event.distanceMeters, 100);
   assert.equal(event.post.createdAt, 820_000);
-  assert.equal(event.post.summary, "성수대교 진입부 블랙아이스 제보");
+  assert.equal(event.post.summary, BLACK_ICE_SUMMARY);
   assert.equal(event.post.category, "도로 위험");
-  assert.equal(event.post.evidence, "차량 데이터로 관측됨");
-  assert.equal(event.speech, "전방 약 450미터, 성수대교 진입부에 블랙아이스 제보가 있습니다.");
+  assert.equal(event.post.evidence, BLACK_ICE_EVIDENCE);
+  assert.equal(event.speech, "전방 약 100미터, 인하대역 3번 출구 방면에 블랙아이스 의심 제보가 있어요. 차량들이 우회하고 있으니 주의해 주세요.");
   assert.equal(event.simulated, true);
   assert.equal(event.post.simulated, true);
   assert.equal(event.post.id, BlackIceScenario.createEvent("destination").post.id);
+});
+test("앞차 고정 제보는 수신 시연과 동일한 카드와 GLEO 낭독 대사를 사용한다", () => {
+  for (const [scenario, category] of [
+    [TrafficScenario, "교통"],
+    [BlackIceScenario, "도로 위험"],
+    [ParkingScenario, "주차"],
+    [LocalScenario, "지역 정보"],
+  ] as const) {
+    const direct = scenario.createEvent("nearby", 1_000_000);
+    assert.equal(direct.post.category, category);
+    assert.match(direct.speech, /제보가 있어요\./u);
+    const report = { ...direct.post, id: "front-report" };
+    assert.equal(makeRearNotification(report, 850, 1_000_000, scenario), null);
+    assert.equal(makeRearNotification(report, direct.distanceMeters + 1, 1_000_000, scenario), null);
+    const rear = makeRearNotification(report, direct.distanceMeters, 1_000_000, scenario);
+    assert.deepEqual(rear, { ...direct, post: { ...direct.post, id: report.id } });
+  }
 });
 test("수신 이력은 탭별로 독립적이며 같은 탭의 동일 ID는 중복 저장하지 않는다", () => {
   const initial = emptyNotificationHistory();
@@ -162,7 +184,7 @@ test("대기 제보는 도로 위험, 교통 순서이며 같은 범주는 가�
   const base = BlackIceScenario.createEvent("nearby");
   const parking = { ...base, post: { ...base.post, category: "주차" as const } };
   const traffic = { ...base, post: { ...base.post, category: "교통" as const } };
-  const closeHazard = { ...base, distanceMeters: 150 };
+  const closeHazard = { ...base, distanceMeters: 50 };
   assert.deepEqual([parking, base, traffic, closeHazard].sort(compareNotificationPriority),
     [closeHazard, base, traffic, parking]);
 });

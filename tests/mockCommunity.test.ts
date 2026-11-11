@@ -7,11 +7,13 @@ import {
   nextPagePosts,
   pagePosts,
   processReport,
+  scenarioReportInputError,
   scenarioIncoming,
 } from "../src/services/mockCommunity.ts";
-import { blackIce } from "../src/scenarios/blackIce.ts";
+import { blackIce, BLACK_ICE_SUMMARY, BLACK_ICE_EVIDENCE } from "../src/scenarios/blackIce.ts";
 import { CURRENT_USER_ID, mockConfig } from "../src/domain/types.ts";
 import { congestion } from "../src/scenarios/congestion.ts";
+import { parking } from "../src/scenarios/parking.ts";
 import { normalizeReportBody, validateReportBody } from "../src/services/reportInput.ts";
 
 test("20개씩 최신순으로 조회하고 24시간이 지난 글을 제외한다", () => {
@@ -55,8 +57,8 @@ test("Mock AI는 원문과 모의 context를 처리해 선택한 커뮤니티에
   const post = await processReport(blackIce, blackIce.exampleInput, "destination", [], false);
   assert.equal(post.community, "destination");
   assert.equal(post.category, "도로 위험");
-  assert.match(post.summary, /블랙아이스 의심/);
-  assert.match(post.evidence, /시뮬레이션/);
+  assert.equal(post.summary, BLACK_ICE_SUMMARY);
+  assert.equal(post.evidence, BLACK_ICE_EVIDENCE);
   assert.equal(post.simulated, true);
 });
 test("AI 처리 실패 시 대체 게시글을 반환하지 않고 재시도할 수 있다", async () => {
@@ -93,6 +95,7 @@ test("등록 시도당 하나의 Mock 요청으로 원본과 context를 전달�
     false,
     {
       source: "voice",
+      scriptedExample: true,
       onRequest: (input) => {
         calls++;
         assert.equal(input.body, congestion.exampleInput);
@@ -103,6 +106,8 @@ test("등록 시도당 하나의 Mock 요청으로 원본과 context를 전달�
   );
   assert.equal(calls, 1);
   assert.equal(post.category, "교통");
+  assert.equal(post.summary, "인천대교 진입 구간 교통 정체 제보");
+  assert.equal(post.description, "인천대교 진입지점이 지금 막히고 있어요");
   assert.equal(post.community, "direction");
   assert.equal(post.authorId, CURRENT_USER_ID);
   assert.equal(post.source, "voice");
@@ -118,6 +123,7 @@ test("차량 조회 실패와 유사 글 없음은 해당 입력만 제외하고
     createPosts(congestion, "destination"),
     false,
     {
+      scriptedExample: true,
       vehicleDataAvailable: false,
       similarPostsAvailable: false,
       onRequest: (input) => {
@@ -146,6 +152,7 @@ test("AI 실패도 한 번의 요청이며 대체 게시글이 생성되지 않�
   let calls = 0;
   await assert.rejects(
     processReport(congestion, congestion.exampleInput, "nearby", [], true, {
+      scriptedExample: true,
       onRequest: () => calls++,
     }),
     /정리하지 못했어요/,
@@ -153,10 +160,26 @@ test("AI 실패도 한 번의 요청이며 대체 게시글이 생성되지 않�
   assert.equal(calls, 1);
 });
 test("차량 상태 입력 없이 본인 글을 삭제하며 다른 작성자 글은 보존한다", async () => {
-  const own = await processReport(congestion, congestion.exampleInput, "nearby", [], false);
+  const own = await processReport(congestion, "인천대교에 정체가 있어요", "nearby", [], false);
   const peer = createPosts(congestion, "nearby", 1)[0];
   const posts = [own, peer];
   assert.deepEqual(deleteOwnPost(posts, own.id), [peer]);
   assert.deepEqual(deleteOwnPost(posts, peer.id), posts);
   assert.deepEqual(deleteOwnPost(posts, own.id, "another-driver"), posts);
+});
+
+test("시연에서 선택한 범주로 등록한다", async () => {
+  const post = await processReport(congestion, "인천대교에 정체가 심해요", "nearby", [], false, {
+    source: "voice",
+    simulationCategory: congestion.category,
+    aiDelayMs: 0,
+  });
+  assert.equal(post.category, "교통");
+  assert.equal(post.summary, "인천대교에 정체가 심해요");
+});
+
+test("장소가 생략된 고정 예시는 시나리오 시연으로 시작한 경우에만 허용한다", () => {
+  assert.ok(scenarioReportInputError(parking, parking.exampleInput));
+  assert.equal(scenarioReportInputError(parking, parking.exampleInput, undefined, true), null);
+  assert.ok(scenarioReportInputError(congestion, "막히고 있어요", undefined, true));
 });

@@ -3,10 +3,11 @@ import { conservativeResult, normalizeReportBody } from "../services/reportInput
 
 // 주차(충전) 중 상황이므로 주행 제한 OFF에서 터치 작성 + 말로 입력으로 시연합니다.
 const exampleInput =
-  "비룡 주차장 지하 2층에서 충전기를 연결했는데 충전이 시작되지 않네요. 몇 번 시도해도 충전이 진행되지 않아 제보합니다. 이용하실 분들은 참고하세요.";
+  "주차장 지하 2층에서 충전기를 연결했는데 충전이 시작되지 않네요. 몇 번 시도해도 충전이 진행되지 않아 제보합니다. 이용하실 분들은 참고하세요.";
 export const PARKING_SUMMARY = "비룡 주차장 지하 2층 전기차 충전이 안됨 제보";
 export const parking: Scenario = {
   id: "parking",
+  category: "주차",
   name: "주차 제보",
   exampleInput,
   vehicleData: {

@@ -1,12 +1,24 @@
 import type { Scenario } from "../domain/types.ts";
-import { conservativeResult, normalizeReportBody } from "../services/reportInput.ts";
+import { conservativeResult, matchesDemoUtterance, normalizeGleoReport, normalizeReportBody } from "../services/reportInput.ts";
+
+export const BLACK_ICE_SUMMARY = "인하대역 3번 출구 방면 1차선 도로 블랙아이스 제보";
+export const BLACK_ICE_EVIDENCE = "차량 데이터 확인 결과, 인하대역 3번 출구 인근을 통과한 차량에서 결빙 위험 신호가 확인되어 해당 구간의 블랙아이스가 의심됩니다.";
+
+export function matchesInhaBlackIce(utterance: string | undefined, title: string) {
+  const body = utterance || title;
+  if (matchesDemoUtterance(body, blackIce.exampleInput)) return true;
+  const compact = normalizeGleoReport(body).replace(/[\s,.!?。]+/gu, "");
+  return /^인하대역3번출구(?:쯤|부근|근처|방면|인근)?(?:에|에서)?블랙아이스(?:가있(?:어요|다고)|발생(?:했어요|했다고)?|의심)?(?:제보)?$/u.test(compact);
+}
 
 export const blackIce: Scenario = {
   id: "black-ice",
+  category: "도로 위험",
   name: "블랙아이스 제보",
   exampleInput:
-    "성수대교 북단 진입로가 얼어 있어요. 차가 살짝 미끄러졌고 도로가 젖은 것처럼 보여요. 조심하세요.",
-  vehicleData: { outsideTemperature: -3, tractionControl: "모의 작동", location: "성수대교 북단" },
+    "인하대역 3번 출구쯤 블랙아이스 현상 발생해서 차들이 우회하고 있어요. 조심하세요",
+  // Fixed demonstration data, not an actual SDK measurement.
+  vehicleData: { outsideTemperature: -3, Icy_Road: "결빙 위험", location: "인하대역 3번 출구" },
   simulation: {
     initialView: "normal",
     afterReportView: "normal",
@@ -15,8 +27,8 @@ export const blackIce: Scenario = {
   examples: [
     {
       category: "도로 위험",
-      summary: "성수대교 북단, 블랙아이스가 의심돼요.\n진입 시 서행해 주세요.",
-      evidence: "모의 차량 데이터에서 외기온 −3°C, 미끄럼 방지 장치 작동이 설정되었습니다.",
+      summary: BLACK_ICE_SUMMARY,
+      evidence: BLACK_ICE_EVIDENCE,
     },
     {
       category: "교통",
@@ -43,10 +55,10 @@ export const blackIce: Scenario = {
     normalizeReportBody(body) === normalizeReportBody(blackIce.exampleInput)
       ? {
           category: "도로 위험",
-          summary: "성수대교 북단 블랙아이스 의심 제보",
+          summary: BLACK_ICE_SUMMARY,
           evidence:
-            context.vehicleData.outsideTemperature !== undefined
-              ? `시뮬레이션: 외기온 ${context.vehicleData.outsideTemperature}°C, 미끄럼 방지 장치 모의 작동. 실제 차량 관측이 아닙니다.`
+            context.vehicleData.Icy_Road === "결빙 위험"
+              ? BLACK_ICE_EVIDENCE
               : "",
         }
       : conservativeResult(body),

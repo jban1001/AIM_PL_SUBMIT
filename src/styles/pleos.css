@@ -76,3 +76,15 @@
 .pleos-app .vehicle-frame .report-overlay .voice-report { overflow-y: auto; }
 .pleos-app .simulation-console[open] { overflow: visible; }
 .onboarding-host { min-height: 100dvh; }
+
+.vehicle-restriction-screen .main-content[data-vehicle-screen="DRIVING"] {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+.vehicle-restriction-screen .driving-restriction-panel {
+  flex: 1;
+}
+.vehicle-restriction-screen .app-footer {
+  flex-shrink: 0;
+}

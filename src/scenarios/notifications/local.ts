@@ -1,5 +1,5 @@
 import type { ScenarioEventHandler } from "../../domain/notifications.ts";
-import { LOCAL_SUMMARY } from "../local.ts";
+import { local, LOCAL_SUMMARY } from "../local.ts";
 
 // 운전자 A의 국밥집 제보를, 미추홀 구청에 가는 운전자 B가 근처 맛집을 요청했을 때 받는 상황입니다.
 // 음성은 제보 원문을 다시 정리한 문장이며 원문에 없는 내용은 넣지 않습니다.
@@ -10,7 +10,7 @@ export const LocalScenario: ScenarioEventHandler = {
     post: {
       id: "mock-michuhol-gukbap",
       community,
-      category: "지역 정보",
+      category: local.category,
       summary: LOCAL_SUMMARY,
       // 근거가 비어 있으면 카드의 판단 근거 영역이 숨겨집니다.
       evidence: "",

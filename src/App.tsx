@@ -1,4 +1,5 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import {
   CommunityLayout,
   CommunityTabs,
@@ -15,6 +16,7 @@ import { SimulationWorkspace } from "./components/SimulationWorkspace";
 import { Icon } from "./components/Icon";
 import {
   communities,
+  CURRENT_USER_ID,
   mockConfig,
   type CommunityId,
   type Category,
@@ -24,6 +26,8 @@ import {
   type VehicleState,
 } from "./domain/types";
 import { scenarios } from "./scenarios";
+import { congestion, matchesIncheonCongestion } from "./scenarios/congestion";
+import { blackIce, matchesInhaBlackIce } from "./scenarios/blackIce";
 import {
   createPosts,
   deleteOwnPost,
@@ -38,6 +42,7 @@ import { useNotificationDelivery } from "./hooks/useNotificationDelivery";
 import {
   makeRearNotification,
   type MockNotificationData,
+  type ScenarioEventHandler,
   upsertReceivedPost,
   type CommunitySelectionState,
   type DrivingRestrictionState,
@@ -51,17 +56,84 @@ import { preferredPosts } from "./domain/preferences";
 
 import { listenWithPleos } from "./services/pleosMic";
 import { playNotificationChime } from "./services/notificationChime";
-import { normalizeGleoReport, reportInputError, voiceCommandBody, type MissingReportField } from "./services/reportInput";
+import { matchesDemoUtterance, normalizeGleoReport, reportInputError, voiceCommandBody, type MissingReportField } from "./services/reportInput";
 
 declare global {
   interface Window {
+    GazeeVehicle?: { ready(): void };
+    applyGazeeVehicleScreen?: (mode: VehicleScreen) => true;
+    selectGazeeDemoRole?: (role: RelayDemo["role"]) => "ok" | "app-not-ready" | "report-required";
     GazeeGleo?: {
       ready(): void;
       complete(requestId: string, success: boolean): void;
       requestDetails(requestId: string, missing: MissingReportField): void;
-      completeRead(requestId: string, title: string, distanceMeters: number): void;
+      completeRead(requestId: string, announcement: string): void;
     };
   }
+}
+
+type VehicleScreen = "NORMAL" | "LIMITED" | "DRIVING";
+const silentPlayback = { status: "idle", detail: "" } as const;
+
+function VehicleRestrictionScreen({
+  mode,
+  selected = "nearby",
+  onSelect,
+  notification,
+  relay,
+}: {
+  mode: Exclude<VehicleScreen, "NORMAL">;
+  selected?: CommunityId;
+  onSelect?: (id: CommunityId) => void;
+  notification?: MockNotificationData;
+  relay?: RelayDemo;
+}) {
+  const community = communities.find((item) => item.id === selected)!;
+  const driving = mode === "DRIVING";
+  return (
+    <div className="prototype-page pleos-app vehicle-restriction-screen" inert={onSelect ? undefined : true}>
+      <VehicleFrame>
+        <main className="main-content" data-vehicle-screen={mode}>
+          <div className="page-heading">
+            <div>
+              {driving && <span className="eyebrow">주행 모드</span>}
+              <h1>{driving ? "운전에 집중하세요" : "게시글 목록이 제한돼요"}</h1>
+              <p className="state-subtitle">
+                {driving ? "새 제보는 수신 카드로 확인하세요." : "게시글은 주차 후 확인할 수 있어요."}
+              </p>
+            </div>
+          </div>
+          {driving && (
+            <>
+              <CommunityTabs selected={selected} onChange={onSelect ?? (() => {})} />
+              <div className="community-description">
+                <Icon name="info" size={14} />
+                {community.description}
+              </div>
+              <DrivingRestrictionPanel
+                communityName={community.name}
+                notification={notification}
+                playback={silentPlayback}
+                enabled={false}
+                onPlay={() => {}}
+                readOnly
+              />
+              <footer className="app-footer">
+                <span><Icon name="shield" size={13} />이용자 제보는 검증된 사실이 아닙니다.</span>
+                <span>GAZEE <i /> COMMUNITY</span>
+              </footer>
+            </>
+          )}
+        </main>
+      </VehicleFrame>
+      {relay && (
+        <details className="simulation-console" aria-label="시연 조작 영역">
+          <summary>시연 조작 열기</summary>
+          <DemoVehicleControls relay={relay} />
+        </details>
+      )}
+    </div>
+  );
 }
 
 type GleoReportPayload = { body: string; location?: string; condition?: string; utterance?: string };
@@ -72,9 +144,32 @@ type RelayDemo = {
   role: "front" | "rear";
   report: Post | null;
   distance: number;
+  receiveScenario?: ScenarioEventHandler;
   publish: (post: Post) => void;
-  showRear: () => void;
+  selectRole: (role: RelayDemo["role"]) => void;
 };
+
+function DemoVehicleControls({ relay }: { relay: RelayDemo }) {
+  const front = relay.role === "front";
+  return (
+    <div className="relay-demo-controls" aria-label="앞차와 뒤차 시연 제어">
+      <span className="vehicle-relay-badge">{front ? "앞차 · 제보 차량" : "뒤차 · 수신 차량"}</span>
+      <span className="vehicle-relay-status" role="status">
+        {front
+          ? relay.report ? "등록 완료 · " + relay.report.summary : "앞차 제보를 등록하면 뒤차로 전환할 수 있어요."
+          : `전방 ${relay.distance}m · ${relay.distance > 500 ? "접근 중" : "수신 완료"}`}
+      </span>
+      <button
+        type="button"
+        className="secondary-button"
+        disabled={front && !relay.report}
+        onClick={() => relay.selectRole(front ? "rear" : "front")}
+      >
+        {front ? "뒤차로 전환" : "앞차로 전환"}
+      </button>
+    </div>
+  );
+}
 
 type Feed = { all: Post[]; visible: Post[]; pending: Post[]; scroll: number };
 type CommunityPostData = Record<CommunityId, Feed>;
@@ -109,7 +204,8 @@ function initialFeeds(preferredCategories: Category[]) {
     }),
   ) as Record<CommunityId, Feed>;
 }
-function RoadtownPrototype({ onReset, preferredCategories, relay }: {
+function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen }: {
+  vehicleScreen: VehicleScreen;
   relay: RelayDemo;
   onReset: () => void;
   preferredCategories: Category[];
@@ -118,14 +214,17 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
   const receivedRelayId = useRef<string | null>(null);
   const gleoRequest = useRef<string | null>(null);
   const [scenarioId, setScenarioId] = useState(scenarios[0].id);
+  const [gleoDemo, setGleoDemo] = useState<{ scenarioId: string; community: CommunityId } | null>(null);
   const scenario = scenarios.find((item) => item.id === scenarioId)!;
   const [feeds, setFeeds] = useState<CommunityPostData>(() => initialFeeds(preferredCategories));
-  const [vehicleState, setVehicleState] = useState<VehicleState>("driving");
-  const driving = vehicleState === "driving";
+  const [vehicleState, setVehicleState] = useState<VehicleState>(
+    window.GazeeVehicle && relay.role === "front" ? "parked" : "driving",
+  );
+  const readOnly = vehicleScreen === "LIMITED";
+  const driving = !readOnly && vehicleState === "driving";
   const drivingRestrictionState: DrivingRestrictionState = driving
     ? "DRIVING_RESTRICTED"
     : "UNRESTRICTED";
-  const [tts, setTts] = useState(true);
   const [wakeListening, setWakeListening] = useState(false);
   const [wakeStatus, setWakeStatus] = useState("");
   const [ttsTestStatus, setTtsTestStatus] = useState("");
@@ -177,11 +276,11 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
       setSpeechFault("none");
       return fault;
     },
-    onPublished: (post, mode, voiceInput) => {
+    onPublished: (post, _mode, voiceInput) => {
       updateFeed(post.community, (current) => ({
         ...current,
         all: [post, ...current.all],
-        visible: [...preferredPosts([post], preferredCategories), ...current.visible],
+        visible: [post, ...current.visible],
         scroll: 0,
       }));
       if (relay.role === "front") relay.publish(post);
@@ -189,47 +288,56 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
         window.GazeeGleo?.complete(gleoRequest.current, true);
         gleoRequest.current = null;
       }
-      if (mode === "touch") setSelected(post.community);
+      setSelected(post.community);
+      window.scrollTo(0, 0);
       setViewState(scenario.simulation?.afterReportView ?? "normal");
       setToast("제보가 등록되었습니다.");
     },
   });
   const session = flow.session;
   const voiceSession = session?.mode === "voice" ? session : null;
-  const touchSession = session?.mode === "touch" ? session : null;
-  const blocked = driving || !!voiceSession;
+  const touchSession = !readOnly && session?.mode === "touch" ? session : null;
+  const blocked = driving || (!readOnly && !!voiceSession);
   const busy = !!session && ["listening", "processing", "success"].includes(session.phase);
   const speechActive = session?.phase === "listening" || session?.phase === "processing";
   const delivery = useNotificationDelivery({
-    enabled: tts,
-    paused: !!speechActive || wakeListening || ttsTesting,
+    enabled: true,
+    paused: vehicleScreen !== "NORMAL" || !!speechActive || wakeListening || ttsTesting,
   });
   const acceptGleo = useEffectEvent((requestId: string, report: GleoReportPayload) => {
     const details = report.location !== undefined || report.condition !== undefined || report.utterance !== undefined
-      ? { location: report.location ?? "", condition: report.condition ?? "", utterance: report.utterance }
+      ? { location: report.location ?? "", condition: report.condition ?? "", utterance: report.utterance?.trim() || undefined }
       : undefined;
     const title = normalizeGleoReport(report.body || (details ? `${details.location} ${details.condition}` : ""));
-    const issue = reportInputError(title, details);
+    const demo = gleoDemo?.scenarioId === scenarioId
+      ? simulationTabs.find((tab) => tab.reportScenarioId === scenarioId && tab.reportMode === "voice")
+      : undefined;
+    const fixedScenario = matchesIncheonCongestion(details?.utterance, title) ? congestion
+      : matchesInhaBlackIce(details?.utterance, title) ? blackIce : undefined;
+    const reportScenario = fixedScenario ?? scenario;
+    const scriptedExample = !!fixedScenario || (!!demo && matchesDemoUtterance(details?.utterance || title, scenario.exampleInput));
+    const issue = scriptedExample ? null : reportInputError(title, details);
     if (issue) {
       setToast(issue.message);
       window.GazeeGleo?.requestDetails(requestId, issue.missing);
       return;
     }
-    if (!flow.begin("voice", selected, scenario, title, "gleo", details)) {
+    const body = scriptedExample ? reportScenario.exampleInput : title;
+    if (!flow.begin("voice", demo ? gleoDemo!.community : selected, reportScenario, body, "gleo", details, {
+      scriptedExample,
+      simulationCategory: scriptedExample || demo ? reportScenario.category : undefined,
+    })) {
       window.GazeeGleo?.complete(requestId, false);
       return;
     }
     gleoRequest.current = requestId;
+    setGleoDemo(null);
     setWakeListening(false);
   });
   const readForGleo = useEffectEvent((requestId: string) => {
-    const received = Object.values(delivery.history).flat();
-    const latest = received.sort((a, b) => b.receivedAt - a.receivedAt)[0];
-    window.GazeeGleo?.completeRead(
-      requestId,
-      latest?.post.summary ?? "",
-      latest?.distanceMeters ?? 0,
-    );
+    const received = delivery.history[selected][0]
+      ?? Object.values(delivery.history).flat().sort((a, b) => b.receivedAt - a.receivedAt)[0];
+    window.GazeeGleo?.completeRead(requestId, received?.speech ?? "");
   });
   useEffect(() => {
     const bridge = window.GazeeGleo;
@@ -264,9 +372,13 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
       return;
     }
     setWakeStatus("");
-    flow.begin("voice", selected, scenario, body);
+    const fixedScenario = body && (matchesIncheonCongestion(body, "") ? congestion : matchesInhaBlackIce(body, "") ? blackIce : undefined);
+    flow.begin("voice", selected, fixedScenario || scenario, fixedScenario ? fixedScenario.exampleInput : body, "mic", undefined, {
+      scriptedExample: !!fixedScenario,
+      simulationCategory: fixedScenario ? fixedScenario.category : undefined,
+    });
   });
-  const canListenForWake = driving && !voiceSession && !busy;
+  const canListenForWake = vehicleScreen === "NORMAL" && driving && !voiceSession && !busy;
   useEffect(() => {
     if (!wakeListening) return;
     if (!canListenForWake) {
@@ -285,6 +397,10 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
   }, [wakeListening, canListenForWake]);
 
   const notification = delivery.history[selected][0];
+  const latestOwnPost = visiblePosts.find((post) => post.authorId === CURRENT_USER_ID);
+  const publishedPost = latestOwnPost && (!notification || latestOwnPost.createdAt >= notification.receivedAt)
+    ? latestOwnPost
+    : undefined;
   const receivedCount = Object.values(delivery.history).reduce(
     (count, items) => count + items.length,
     0,
@@ -295,8 +411,10 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
     const incoming = handler.createEvent(selected);
     const event =
       delivery.history[selected].find((item) => item.post.id === incoming.post.id) ?? incoming;
-    if (preferredCategories.includes(event.post.category) || event.post.category === "기타") receivePost(event);
-    else setToast("선택하지 않은 관심 범주의 제보는 표시하지 않습니다.");
+    setGleoDemo(null);
+    setVehicleState("driving");
+    receivePost(event);
+    window.scrollTo(0, 0);
   }
 
   function receivePost(event: MockNotificationData) {
@@ -311,7 +429,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
 
   const receiveRelay = useEffectEvent((post: Post, distance: number) => {
     if (receivedRelayId.current === post.id) return;
-    const event = makeRearNotification(post, distance);
+    const event = makeRearNotification(post, distance, Date.now(), relay.receiveScenario);
     if (!event) return;
     receivedRelayId.current = post.id;
     receivePost(event);
@@ -395,6 +513,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
   function changeScenario(id: string) {
     if (session) return;
     setScenarioId(id);
+    setGleoDemo(null);
     const next = scenarios.find((item) => item.id === id)!;
     setFailAI(next.simulation?.failFirstReport ?? false);
   }
@@ -423,8 +542,20 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
   const inPleos = window.GazeeSpeech !== undefined;
   const DemoControls = inPleos ? "details" : "section";
 
+  if (vehicleScreen === "DRIVING") {
+    return (
+      <VehicleRestrictionScreen
+        mode={vehicleScreen}
+        selected={selected}
+        onSelect={setSelected}
+        notification={notification}
+        relay={relay}
+      />
+    );
+  }
+
   return (
-    <div className={inPleos ? "prototype-page pleos-app" : "prototype-page"}>
+    <div className={inPleos ? "prototype-page pleos-app" : "prototype-page"} inert={readOnly || undefined}>
       <header className="prototype-heading">
         <div>
           <span className="eyebrow">GAZEE / LOCAL PREVIEW</span>
@@ -439,13 +570,14 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
       <VehicleFrame>
         <CommunityLayout
           vehicleState={vehicleState}
+          readOnly={readOnly}
           time={clock.toLocaleTimeString("ko-KR", {
             hour: "2-digit",
             minute: "2-digit",
             hour12: false,
           })}
         >
-          <main className="main-content" data-restriction-state={drivingRestrictionState}>
+          <main className="main-content" data-vehicle-screen={vehicleScreen} data-restriction-state={drivingRestrictionState}>
             <div className="page-heading">
               <div>
                 <span className="eyebrow">
@@ -453,25 +585,14 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
                 </span>
                 <h1>{driving ? "운전에 집중하세요" : "지금, 내 주변 소식"}</h1>
                 <p className="state-subtitle">
-                  {driving
-                    ? "새 제보는 알림음으로, 내용은 Gleo에게 요청해 들으세요."
+                  {readOnly
+                    ? "글 작성과 화면 조작은 주차 후 사용할 수 있어요."
+                    : driving
+                    ? "새 제보는 알림음으로 알려드려요. 내용은 GLEO에게 물어보세요."
                     : inPleos
                       ? "Gleo에게 장소와 상황을 말해 제보할 수 있어요."
                       : "같은 길을 지나는 운전자들의 제보를 확인하세요."}
                 </p>
-              </div>
-              <div className="voice-guidance-control">
-                <span>수신 알림음 <strong>{tts ? "ON" : "OFF"}</strong></span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-label="새 제보 수신 알림음"
-                  aria-checked={tts}
-                  className={`toggle ${tts ? "on" : ""}`}
-                  onClick={() => setTts((value) => !value)}
-                >
-                  <span />
-                </button>
               </div>
             </div>
             <CommunityTabs selected={selected} onChange={setSelected} />
@@ -522,6 +643,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
                     <PostList
                       community={selected}
                       posts={visiblePosts}
+                      readOnly={readOnly}
                       loading={loading || viewState === "loading"}
                       empty={viewState === "empty"}
                       offline={offline}
@@ -546,13 +668,17 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
                   </section>
                 )}
               </div>
-              {voiceSession ? (
+              {!readOnly && voiceSession ? (
                 <div className="report-overlay">
                   <VoiceReport
                     session={voiceSession}
                     community={communityName(voiceSession.community)}
                     onRetry={flow.retry}
-                    onCancel={flow.cancel}
+                    onCancel={() => {
+                      if (gleoRequest.current) window.GazeeGleo?.complete(gleoRequest.current, false);
+                      gleoRequest.current = null;
+                      flow.cancel();
+                    }}
                   />
                 </div>
               ) : (
@@ -560,8 +686,9 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
                   <DrivingRestrictionPanel
                     communityName={community.name}
                     notification={notification}
+                    publishedPost={publishedPost}
                     playback={delivery.stateFor(notification?.post.id ?? "")}
-                    enabled={tts}
+                    enabled
                     voiceWake={window.GazeeMic ? {
                       active: wakeListening,
                       status: wakeStatus,
@@ -587,19 +714,10 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
           </main>
         </CommunityLayout>
       </VehicleFrame>
+      {!readOnly && <>
       <DemoControls className="simulation-console" aria-label="시연 조작 영역">
         {inPleos && <summary>시연 조작 열기</summary>}
-        <div className="relay-demo-controls" aria-label="앞차와 뒤차 시연 제어">
-          <span className="vehicle-relay-badge">{relay.role === "front" ? "앞차 · 제보 차량" : "뒤차 · 수신 차량"}</span>
-          <span className="vehicle-relay-status" role="status">
-            {relay.role === "front"
-              ? relay.report ? `등록 완료 · ${relay.report.summary}` : "같은 경로의 앞차와 뒤차 시연"
-              : relay.distance > 500 ? "전방 850m · 접근 중" : "전방 450m · 알림 구간 진입"}
-          </span>
-          {relay.role === "front" && (
-            <button type="button" className="secondary-button" disabled={!relay.report} onClick={relay.showRear}>뒤차로 전환</button>
-          )}
-        </div>
+        <DemoVehicleControls relay={relay} />
         <div className="console-top">
           <div className="console-label">
             <span className="console-icon">
@@ -655,15 +773,25 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
           canReport={!busy && !offline}
           canReceive={!offline && !session}
           onSelect={changeScenario}
+          onGleo={window.GazeeGleo && vehicleScreen === "NORMAL" ? () => {
+            setWakeListening(false);
+            setGleoDemo(gleoDemo ? null : { scenarioId, community: selected });
+          } : undefined}
+          gleoExample={gleoDemo ? simulationTabs.find((tab) => tab.reportScenarioId === gleoDemo.scenarioId)?.gleoExample : undefined}
           onReport={() => {
+            setGleoDemo(null);
             const tab = simulationTabs.find((item) => item.reportScenarioId === scenarioId);
             if (tab?.reportMode !== "dictation") {
-              flow.begin("voice", selected, scenario);
+              flow.beginVoiceDemo(selected, scenario, tab?.speed);
+              window.scrollTo(0, 0);
               return;
             }
             if (driving) setToast(DICTATION_REQUIRES_STOPPED);
             else if (session) setToast("작성 중인 제보를 먼저 등록하거나 취소해 주세요.");
-            else flow.beginDictationDemo(selected, scenario, tab.speed);
+            else {
+              flow.beginDictationDemo(selected, scenario, tab.speed);
+              window.scrollTo(0, 0);
+            }
           }}
           onReceive={receiveScenario}
         />
@@ -674,7 +802,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
                 <Icon name="info" size={14} />
                 수신 시뮬레이션은 현재 선택된 탭에만 전달합니다.
               </span>
-              <span>Mock 게시글 생성 → 450 m 접근 이벤트 → 알림음 1회 · 카드 유지 · 읽기는 Gleo 요청</span>
+              <span>시나리오 수신 → 제보 카드 표시 및 알림음 1회</span>
               <b>수신 {receivedCount}건</b>
             </div>
             <div className="demo-options">
@@ -801,7 +929,8 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
           <b>03</b>주행 제한 OFF → 커뮤니티 목록
         </span>
       </div>
-      {toast && (
+      </>}
+      {!readOnly && toast && (
         <div className="toast" role="status">
           <Icon name="check" size={18} />
           {toast}
@@ -812,16 +941,45 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
 }
 
 export default function App() {
+  const [vehicleScreen, setVehicleScreen] = useState<VehicleScreen>("NORMAL");
+  useLayoutEffect(() => {
+    const bridge = window.GazeeVehicle;
+    if (!bridge) return;
+    window.applyGazeeVehicleScreen = (mode) => {
+      flushSync(() => setVehicleScreen(mode));
+      return true;
+    };
+    bridge.ready();
+    return () => { delete window.applyGazeeVehicleScreen; };
+  }, []);
   const [demoVersion, setDemoVersion] = useState(0);
   const [preferredCategories, setPreferredCategories] = useState<Category[] | null>(null);
   const [role, setRole] = useState<RelayDemo["role"]>("front");
   const [report, setReport] = useState<Post | null>(null);
   const [distance, setDistance] = useState(850);
+  const rearScenario = simulationTabs.find((tab) => tab.reportScenarioId === report?.scriptedScenarioId)?.notification;
   useEffect(() => {
     if (role !== "rear" || !report) return;
-    const timer = window.setTimeout(() => setDistance(450), REAR_APPROACH_DELAY_MS);
+    const targetDistance = rearScenario?.createEvent(report.community).distanceMeters ?? 450;
+    const timer = window.setTimeout(() => setDistance(targetDistance), REAR_APPROACH_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [role, report]);
+  }, [role, report, rearScenario]);
+
+  const selectRole = useCallback((next: RelayDemo["role"]) => {
+    if (!preferredCategories) return "app-not-ready";
+    if (next === "rear" && !report) return "report-required";
+    if (role !== next) {
+      setDistance(850);
+      setRole(next);
+      window.scrollTo(0, 0);
+    }
+    return "ok";
+  }, [preferredCategories, report, role]);
+  useLayoutEffect(() => {
+    if (!window.GazeeVehicle) return;
+    window.selectGazeeDemoRole = selectRole;
+    return () => { delete window.selectGazeeDemoRole; };
+  }, [selectRole]);
 
   function reset() {
     setRole("front");
@@ -829,21 +987,31 @@ export default function App() {
     setDistance(850);
     setDemoVersion((value) => value + 1);
   }
-  if (!preferredCategories) return <div className={window.GazeeMic ? "pleos-app onboarding-host" : "onboarding-host"}>
-    <AppOnboarding onComplete={setPreferredCategories} />
-  </div>;
+  const showCommunity = preferredCategories !== null || vehicleScreen === "LIMITED";
   return (
-    <RoadtownPrototype
-      preferredCategories={preferredCategories}
-      key={`${demoVersion}-${role}`}
-      onReset={reset}
-      relay={{
-        role,
-        report,
-        distance,
-        publish: setReport,
-        showRear: () => { setRole("rear"); window.scrollTo(0, 0); },
-      }}
-    />
+    <>
+      {!preferredCategories && (
+        <div className={window.GazeeMic ? "pleos-app onboarding-host" : "onboarding-host"}
+          style={vehicleScreen === "NORMAL" ? undefined : { display: "none" }}>
+          <AppOnboarding onComplete={setPreferredCategories} />
+        </div>
+      )}
+      {showCommunity ? (
+        <RoadtownPrototype
+          preferredCategories={preferredCategories ?? ["교통", "도로 위험", "주차", "지역 정보"]}
+          vehicleScreen={vehicleScreen}
+          key={`${demoVersion}-${role}`}
+          onReset={reset}
+          relay={{
+            role,
+            report,
+            distance,
+            receiveScenario: rearScenario,
+            publish: setReport,
+            selectRole,
+          }}
+        />
+      ) : vehicleScreen === "DRIVING" ? <VehicleRestrictionScreen mode="DRIVING" /> : null}
+    </>
   );
 }

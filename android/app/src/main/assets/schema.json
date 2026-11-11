@@ -9,17 +9,17 @@
       "function": {
         "name": "GAZEE_CREATE_REPORT",
         "component": "service",
-        "description": "Registers a road report with a specific location and condition explicitly stated by the driver.",
+        "description": "Hands a road report to the app for validation and registration. Use the place as stated, including a broad road or landmark. Call the action with the available details before asking for clarification; the app handles any missing details.",
         "parameters": {
           "type": "object",
           "properties": {
             "reportTitle": {
               "type": "string",
-              "description": "A concise Korean road-condition title containing the driver's stated location and situation, without assistant or app invocation names or report-submission commands. The title retains stated uncertainty, negation, direction, and timing without adding causes or observations."
+              "description": "A concise Korean title using the driver's stated place and situation when provided. A partial title is valid when a detail is missing. Exclude assistant and app names and registration commands. Preserve stated uncertainty, negation, direction, and timing without adding facts."
             },
             "location": {
               "type": "string",
-              "description": "The specific road or place named in the reported observation, excluding the app invocation name. An empty string indicates no specific place was provided."
+              "description": "The road or place named by the driver, as broadly or specifically as stated. Do not infer a location or ask for a more detailed location."
             },
             "condition": {
               "type": "string",
@@ -31,10 +31,7 @@
             }
           },
           "required": [
-            "reportTitle",
-            "location",
-            "condition",
-            "utterance"
+            "reportTitle"
           ]
         }
       }
@@ -44,7 +41,7 @@
       "function": {
         "name": "GAZEE_READ_RECEIVED_REPORT",
         "component": "service",
-        "description": "Provides the latest nearby driver report for a brief, conversational spoken update.",
+        "description": "Reads the latest received GAZEE report aloud using the announcement returned by the app.",
         "parameters": {
           "type": "object",
           "properties": {},

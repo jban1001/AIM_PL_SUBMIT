@@ -49,7 +49,7 @@ export function useNotificationDelivery({
     })
       .then((engine) => {
         if (alive.current && epoch === generation.current)
-          update(id, { status: "played", engine, detail: "알림음 전달 완료 · 제보 읽기는 Gleo에게 요청하세요." });
+          update(id, { status: "played", engine, detail: "알림음 전달 완료" });
       })
       .catch((error) => {
         if (!alive.current || epoch !== generation.current) return;
@@ -97,7 +97,7 @@ export function useNotificationDelivery({
     seen.current.add(id);
     if (automatic.current) enqueue(notification, false);
     else
-      update(id, { status: "muted", detail: "수신 알림음 꺼짐 · 제보는 Gleo에게 읽어달라고 요청하세요." });
+      update(id, { status: "muted", detail: "수신 알림음이 꺼져 있어요." });
   }
   function retryChime(notification: MockNotificationData) {
     if (!allowed.current) return;
