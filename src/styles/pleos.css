@@ -1,0 +1,78 @@
+.vehicle-relay-badge {
+  background: #6536a8;
+  color: #fff;
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.relay-demo-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 16px;
+  background: #f0ebfa;
+  color: #513d68;
+  font-size: 12px;
+}
+.vehicle-relay-status {
+  color: #513d68;
+  font-size: 12px;
+  font-weight: 600;
+}
+.voice-wake-button {
+  text-align: left;
+}
+.voice-wake-button[aria-pressed="true"] {
+  color: #c9b0ec;
+}
+.voice-wake-status {
+  margin-top: 7px;
+  color: #b7b7c3;
+  font-size: 11px;
+}
+
+/* The Pleos host uses the viewport allocated by Android multi-window. */
+.prototype-page.pleos-app {
+  max-width: none;
+  padding: 0;
+}
+.pleos-app .prototype-heading,
+.pleos-app .preview-size,
+.pleos-app .journey-guide {
+  display: none;
+}
+.pleos-app .vehicle-frame {
+  width: 100%;
+  aspect-ratio: auto;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.pleos-app .roadtown-panel {
+  overflow: visible;
+}
+.pleos-app .simulation-console {
+  margin: 8px 12px 12px;
+}
+.pleos-app .simulation-console > summary {
+  padding: 12px 16px;
+  color: #6c527f;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Use the viewport assigned by Pleos when the app occupies all or half of the panel. */
+.pleos-app .vehicle-frame { height: auto; min-height: 0; overflow: visible; }
+.pleos-app .vehicle-frame .roadtown-panel {
+  width: 100%;
+  height: auto;
+  position: static;
+  transform: none;
+  overflow: visible;
+}
+.pleos-app .vehicle-frame .post-scroll { height: auto; max-height: 52dvh; flex: auto; }
+.pleos-app .vehicle-frame .report-overlay .voice-report { overflow-y: auto; }
+.pleos-app .simulation-console[open] { overflow: visible; }
+.onboarding-host { min-height: 100dvh; }

@@ -79,7 +79,6 @@ export const mockConfig = {
   historyHours: 24,
   delayMs: 650,
   aiDelayMs: 1500,
-  minReportChars: 8,
   speechStepMs: 65,
   speechChunkSize: 4,
   speechEndMs: 650,

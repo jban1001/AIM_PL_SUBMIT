@@ -144,9 +144,7 @@
 }
 .roadtown-panel {
   min-width: 0;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
-  scrollbar-width: thin;
+  overflow: visible;
   background: #fafafd;
 }
 .app-body {
@@ -2693,84 +2691,22 @@
   }
 }
 
-.vehicle-relay-bar {
+.voice-guidance-control {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
   align-items: center;
-  gap: 12px;
-  padding: 12px clamp(12px, 2.2vw, 32px);
-  background: #f0ebfa;
-  border-bottom: 1px solid #ded3f1;
-}
-.vehicle-relay-bar > div {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  align-self: flex-start;
   gap: 10px;
-  min-width: 0;
+  margin-left: 16px;
+  color: #64748b;
+  font-size: 13px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
-.vehicle-relay-badge {
-  background: #6536a8;
-  color: #fff;
-  border-radius: 7px;
-  padding: 6px 10px;
-  font-size: 12px;
-  font-weight: 700;
-}
-.relay-demo-controls {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-  padding: 10px 16px;
-  background: #f0ebfa;
-  color: #513d68;
-  font-size: 12px;
-}
-.vehicle-relay-status {
-  color: #513d68;
-  font-size: 12px;
+.voice-guidance-control strong {
+  color: #334155;
   font-weight: 600;
 }
-.voice-wake-button {
-  text-align: left;
-}
-.voice-wake-button[aria-pressed="true"] {
-  color: #c9b0ec;
-}
-.voice-wake-status {
-  margin-top: 7px;
-  color: #b7b7c3;
-  font-size: 11px;
-}
-
-/* The Pleos host uses the viewport allocated by Android multi-window. */
-.prototype-page.pleos-app {
-  max-width: none;
-  padding: 0;
-}
-.pleos-app .prototype-heading,
-.pleos-app .preview-size,
-.pleos-app .journey-guide {
-  display: none;
-}
-.pleos-app .vehicle-frame {
-  width: 100%;
-  aspect-ratio: auto;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-.pleos-app .roadtown-panel {
-  overflow: visible;
-}
-.pleos-app .simulation-console {
-  margin: 8px 12px 12px;
-}
-.pleos-app .simulation-console > summary {
-  padding: 12px 16px;
-  color: #6c527f;
-  font-weight: 600;
-  cursor: pointer;
+.voice-guidance-control .toggle:focus-visible {
+  outline: 2px solid #806393;
+  outline-offset: 4px;
 }

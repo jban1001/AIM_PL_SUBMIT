@@ -1,6 +1,25 @@
 import type { CSSProperties } from "react";
 
 const paths: Record<string, React.ReactNode> = {
+  parking: (
+    <>
+      <rect x="3" y="3" width="18" height="18" rx="4" />
+      <path d="M9 17V7h4a3 3 0 0 1 0 6H9" />
+    </>
+  ),
+  traffic: (
+    <>
+      <rect x="7" y="2" width="10" height="18" rx="4" />
+      <circle cx="12" cy="6" r="1" /><circle cx="12" cy="11" r="1" /><circle cx="12" cy="16" r="1" />
+      <path d="M12 20v2M4 6h3m10 0h3M4 15h3m10 0h3" />
+    </>
+  ),
+  warning: (
+    <>
+      <path d="m10.3 4-8 14a2 2 0 0 0 1.7 3h16a2 2 0 0 0 1.7-3l-8-14a2 2 0 0 0-3.4 0Z" />
+      <path d="M12 9v5m0 3v.1" />
+    </>
+  ),
   pin: (
     <>
       <path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z" />

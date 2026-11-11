@@ -2,12 +2,17 @@ import type { Scenario } from "../domain/types.ts";
 import { conservativeResult, normalizeReportBody } from "../services/reportInput.ts";
 
 const exampleInput =
-  "지금 ○○도로 정체가 심해요. 차가 거의 움직이지 않고 멈췄다 출발하기를 반복해요.";
+  "지금 인천대로 진입 지점에서 차가 너무 막혀요. 조금 움직이다가 다시 멈추는 상황이 반복되고 있어요.";
 export const congestion: Scenario = {
   id: "congestion",
   name: "도로 정체 제보",
   exampleInput,
-  vehicleData: { averageSpeed: 8, stops: 6, observation: "모의 저속·반복 정지" },
+  vehicleData: {
+    averageSpeed: 8,
+    stops: 6,
+    observation: "모의 저속·반복 정지",
+    location: "강변북로 성수 방면",
+  },
   examples: [
     {
       category: "교통",
@@ -23,7 +28,10 @@ export const congestion: Scenario = {
   process: (body, context) =>
     normalizeReportBody(body) === normalizeReportBody(exampleInput)
       ? {
-          summary: "○○도로 정체 관련 제보",
+          summary:
+            typeof context.vehicleData.location === "string" && context.vehicleData.location.trim()
+              ? `${context.vehicleData.location.trim()} 정체 관련 제보`
+              : "정체 관련 제보",
           category: "교통",
           evidence:
             context.vehicleData.averageSpeed !== undefined

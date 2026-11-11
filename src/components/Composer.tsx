@@ -44,6 +44,17 @@ export function Composer({
         등록 대상 · {community}
         <Icon name="lock" size={13} />
       </div>
+      {session.error && (
+        <div className="inline-error" role="alert">
+          <Icon name="info" size={18} />
+          <div>
+            {session.error}
+            {session.phase === "ai-error" && (
+              <p>원본은 게시되지 않았습니다. 내용은 그대로 보관했어요.</p>
+            )}
+          </div>
+        </div>
+      )}
       <label htmlFor="report-body">제보 내용</label>
       <div className="body-input">
         <textarea
@@ -55,7 +66,7 @@ export function Composer({
           placeholder="도로 상황을 직접 적거나 마이크로 말해 주세요."
         />
         <button
-          className="microphone-button"
+          className={`microphone-button ${session.demoPress === "mic" ? "is-demo-pressed" : ""}`}
           aria-label="마이크로 본문 입력"
           disabled={processing}
           onClick={onListen}
@@ -74,7 +85,7 @@ export function Composer({
       <div className="composer-help">
         <Icon name="spark" size={21} />
         <div>
-          <b>내용만 적어주세요. 나머지는 AI가 정리할게요.</b>
+          <b>어디에서 어떤 일이 있었는지 함께 적어 주세요.</b>
           <p>
             제목·근거 피드백·범주를 한 번의 Mock 호출로 생성합니다.
             <br />
@@ -82,17 +93,6 @@ export function Composer({
           </p>
         </div>
       </div>
-      {session.error && (
-        <div className="inline-error" role="alert">
-          <Icon name="info" size={18} />
-          <div>
-            {session.error}
-            {session.phase === "ai-error" && (
-              <p>원본은 게시되지 않았습니다. 내용은 그대로 보관했어요.</p>
-            )}
-          </div>
-        </div>
-      )}
       {processing && (
         <div className="processing-banner" role="status">
           <span className="spinner" />
@@ -105,7 +105,7 @@ export function Composer({
       <div className="composer-actions">
         <span>등록 대상은 작성 도중 탭을 바꿔도 유지됩니다.</span>
         <button
-          className="primary-button"
+          className={`primary-button ${session.demoPress === "submit" ? "is-demo-pressed" : ""}`}
           disabled={!session.body.trim() || processing}
           onClick={onSubmit}
         >

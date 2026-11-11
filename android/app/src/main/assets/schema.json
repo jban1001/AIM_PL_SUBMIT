@@ -9,17 +9,32 @@
       "function": {
         "name": "GAZEE_CREATE_REPORT",
         "component": "service",
-        "description": "Registers a concise road-condition report title derived from the driver's explicit request to share an observation.",
+        "description": "Registers a road report with a specific location and condition explicitly stated by the driver.",
         "parameters": {
           "type": "object",
           "properties": {
             "reportTitle": {
               "type": "string",
               "description": "A concise Korean road-condition title containing the driver's stated location and situation, without assistant or app invocation names or report-submission commands. The title retains stated uncertainty, negation, direction, and timing without adding causes or observations."
+            },
+            "location": {
+              "type": "string",
+              "description": "The specific road or place named in the reported observation, excluding the app invocation name. An empty string indicates no specific place was provided."
+            },
+            "condition": {
+              "type": "string",
+              "description": "The observed situation explicitly described by the driver, preserving negation and uncertainty. An empty string indicates no situation was provided."
+            },
+            "utterance": {
+              "type": "string",
+              "description": "The driver's latest report request in their original words, including its app invocation and wording even if the location or condition is missing."
             }
           },
           "required": [
-            "reportTitle"
+            "reportTitle",
+            "location",
+            "condition",
+            "utterance"
           ]
         }
       }
@@ -29,7 +44,7 @@
       "function": {
         "name": "GAZEE_READ_RECEIVED_REPORT",
         "component": "service",
-        "description": "Returns the most recently received road-condition report near the driver.",
+        "description": "Provides the latest nearby driver report for a brief, conversational spoken update.",
         "parameters": {
           "type": "object",
           "properties": {},

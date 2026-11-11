@@ -8,7 +8,8 @@ import {
   type SpeechFault,
 } from "../domain/types";
 import { processReport, type ReportOptions } from "../services/mockCommunity";
-import { normalizeReportBody, validateGleoReportTitle, validateReportBody } from "../services/reportInput";
+import { normalizeReportBody, reportInputError, type GleoReportDetails } from "../services/reportInput";
+
 import { listenWithPleos } from "../services/pleosMic";
 
 export type ReportPhase =
@@ -29,7 +30,18 @@ export interface ReportSession {
   error: string;
   speechFault: SpeechFault;
   voiceInput: "mock" | "mic" | "gleo";
+  reportDetails?: GleoReportDetails;
+  microphoneReady?: boolean;
+  // 받아쓰기 자동 시연: open(작성 화면) → dictating(말로 입력) → dictated(등록 대기)
+  demo?: "open" | "dictating" | "dictated";
+  // 자동 시연이 곧 누를 버튼을 강조합니다.
+  demoPress?: "mic" | "submit";
+  // 시연 속도 배율. 0.5면 받아쓰기·처리·완료 표시가 모두 2배 길어집니다. 생략 시 1.
+  speed?: number;
 }
+const scaled = (session: Pick<ReportSession, "speed">, ms: number) => ms / (session.speed ?? 1);
+const DEMO_PRESS_DELAY_MS = 900;
+const DEMO_PRESS_HOLD_MS = 500;
 interface FlowProps {
   getPosts: (community: CommunityId) => Post[];
   getOptions: () => ReportOptions & { fail: boolean; offline: boolean };
@@ -68,6 +80,7 @@ export function useReportFlow(props: FlowProps) {
     scenario: Scenario,
     providedBody?: string,
     voiceInput: ReportSession["voiceInput"] = providedBody === undefined ? "mock" : "mic",
+    reportDetails?: GleoReportDetails,
   ) {
     if (
       busy.current ||
@@ -86,17 +99,27 @@ export function useReportFlow(props: FlowProps) {
       phase: mode === "voice" ? "listening" : "editing",
       error: "",
       voiceInput,
+      microphoneReady: false,
+      reportDetails,
       speechFault: mode === "voice" && voiceInput === "mock" ? latest.current.consumeSpeechFault() : "none",
     });
     if (providedBody) void submit(providedBody);
     return true;
   }
+  // 터치 작성 화면을 열고 말로 입력 → 받아쓰기 → 등록을 순서대로 자동 진행합니다.
+  // 각 단계는 사용자가 직접 누르는 것과 같은 listen/submit 경로를 사용합니다.
+  function beginDictationDemo(community: CommunityId, scenario: Scenario, speed = 1) {
+    if (busy.current || current.current) return;
+    begin("touch", community, scenario);
+    patch({ demo: "open", speed });
+  }
   async function submit(text?: string) {
     const snapshot = current.current;
     if (!snapshot || busy.current) return;
     const body = normalizeReportBody(text ?? snapshot.body);
-    if (!(snapshot.voiceInput === "gleo" ? validateGleoReportTitle(body) : validateReportBody(body))) {
-      patch({ body, phase: "insufficient", error: "어떤 상황인지 한 문장 더 말해 주세요" });
+    const issue = reportInputError(body, snapshot.reportDetails);
+    if (issue) {
+      patch({ body, phase: "insufficient", error: issue.message });
       return;
     }
     const options = latest.current.getOptions();
@@ -117,7 +140,7 @@ export function useReportFlow(props: FlowProps) {
         snapshot.community,
         latest.current.getPosts(snapshot.community),
         options.fail,
-        { ...options, source: snapshot.mode, gleoTitle: snapshot.voiceInput === "gleo" },
+        { ...options, source: snapshot.mode, reportDetails: snapshot.reportDetails, aiDelayMs: scaled(snapshot, mockConfig.aiDelayMs) },
       );
       if (!alive.current || current.current?.id !== snapshot.id) return;
       latest.current.onPublished(post, snapshot.mode, snapshot.voiceInput);
@@ -131,11 +154,17 @@ export function useReportFlow(props: FlowProps) {
   }
   function listen() {
     if (busy.current || !current.current || current.current.phase === "success") return;
+    const demo = current.current.demo;
+    const voiceInput = demo || !window.GazeeMic ? "mock" : "mic";
     patch({
       body: "",
       phase: "listening",
       error: "",
-      speechFault: current.current.voiceInput === "mock" ? latest.current.consumeSpeechFault() : "none",
+      voiceInput,
+      microphoneReady: false,
+      speechFault: voiceInput === "mock" ? latest.current.consumeSpeechFault() : "none",
+      demo: demo === "open" ? "dictating" : demo,
+      demoPress: undefined,
     });
   }
   function retry() {
@@ -154,11 +183,17 @@ export function useReportFlow(props: FlowProps) {
         return current.current?.id === snapshot.id && current.current.phase === "listening";
       }
       return listenWithPleos({
+        onReady: () => { if (isCurrent()) patch({ microphoneReady: true }); },
         onPartial: (body) => { if (isCurrent()) patch({ body }); },
-        onResult: (body) => { if (isCurrent()) void submit(body); },
+        onResult: (body) => {
+          if (!isCurrent()) return;
+          if (snapshot.mode === "voice") void submit(body);
+          else patch({ body, phase: "editing" });
+        },
         onError: (error) => { if (isCurrent()) patch({ phase: "stt-error", error }); },
       });
     }
+    if (snapshot.voiceInput === "gleo") return;
     let finishTimer: ReturnType<typeof setTimeout>;
     let index = 0;
     const text =
@@ -183,14 +218,19 @@ export function useReportFlow(props: FlowProps) {
           finishTimer = setTimeout(() => {
             if (current.current?.id !== snapshot.id || current.current.phase !== "listening")
               return;
-            if (!validateReportBody(text))
-              patch({ phase: "insufficient", error: "어떤 상황인지 한 문장 더 말해 주세요" });
+            const issue = reportInputError(text);
+            if (issue)
+              patch({ phase: "insufficient", error: issue.message });
             else if (snapshot.mode === "voice") void submit(text);
-            else patch({ phase: "editing" });
-          }, mockConfig.speechEndMs);
+            else
+              patch({
+                phase: "editing",
+                demo: current.current.demo === "dictating" ? "dictated" : current.current.demo,
+              });
+          }, scaled(snapshot, mockConfig.speechEndMs));
         }
       },
-      snapshot.speechFault === "stt" ? 1300 : mockConfig.speechStepMs,
+      scaled(snapshot, snapshot.speechFault === "stt" ? 1300 : mockConfig.speechStepMs),
     );
     return () => {
       clearInterval(interval);
@@ -199,13 +239,40 @@ export function useReportFlow(props: FlowProps) {
     // Body streaming must not restart recognition; only a new session/phase does.
   }, [session?.id, session?.phase]);
   useEffect(() => {
+    const snapshot = session;
+    if (!snapshot || snapshot.phase !== "editing") return;
+    const press =
+      snapshot.demo === "open" ? "mic" : snapshot.demo === "dictated" ? "submit" : null;
+    if (!press) return;
+    const stillHere = () =>
+      current.current?.id === snapshot.id &&
+      current.current.phase === "editing" &&
+      current.current.demo === snapshot.demo;
+    const pressTimer = setTimeout(() => {
+      if (stillHere()) patch({ demoPress: press });
+    }, scaled(snapshot, DEMO_PRESS_DELAY_MS));
+    const actTimer = setTimeout(() => {
+      if (!stillHere()) return;
+      if (press === "mic") listen();
+      else {
+        patch({ demo: undefined, demoPress: undefined });
+        void submit();
+      }
+    }, scaled(snapshot, DEMO_PRESS_DELAY_MS + DEMO_PRESS_HOLD_MS));
+    return () => {
+      clearTimeout(pressTimer);
+      clearTimeout(actTimer);
+    };
+  }, [session?.id, session?.phase, session?.demo]);
+  useEffect(() => {
     if (session?.phase !== "success") return;
-    const timeout = setTimeout(closeSession, mockConfig.successMs);
+    const timeout = setTimeout(closeSession, scaled(session, mockConfig.successMs));
     return () => clearTimeout(timeout);
   }, [session?.phase, session?.id]);
   return {
     session,
     begin,
+    beginDictationDemo,
     listen,
     submit: () => void submit(),
     retry,

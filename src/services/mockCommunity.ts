@@ -6,7 +6,7 @@ import {
   type Post,
   type Scenario,
 } from "../domain/types.ts";
-import { normalizeReportBody, validateGleoReportTitle, validateReportBody } from "./reportInput.ts";
+import { normalizeReportBody, reportInputError, type GleoReportDetails } from "./reportInput.ts";
 
 export const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -63,11 +63,12 @@ export interface ReportAIInput {
   similarPosts: Post[];
 }
 export interface ReportOptions {
-  gleoTitle?: boolean;
+  reportDetails?: GleoReportDetails;
   vehicleDataAvailable?: boolean;
   similarPostsAvailable?: boolean;
   source?: InputMode;
   onRequest?: (input: ReportAIInput) => void;
+  aiDelayMs?: number;
 }
 export async function processReport(
   scenario: Scenario,
@@ -79,7 +80,8 @@ export async function processReport(
 ): Promise<Post> {
   if (!body.trim()) throw new Error("내용을 입력해 주세요.");
   const originalBody = normalizeReportBody(body);
-  if (!(options.gleoTitle ? validateGleoReportTitle(originalBody) : validateReportBody(originalBody))) throw new Error("어떤 상황인지 한 문장 더 말해 주세요");
+  const issue = reportInputError(originalBody, options.reportDetails);
+  if (issue) throw new Error(issue.message);
   // Snapshot inputs at report time, before the simulated single Gemini call.
   const input: ReportAIInput = {
     body: originalBody,
@@ -90,7 +92,7 @@ export async function processReport(
         : similarPosts.filter((post) => post.community === community).map((post) => ({ ...post })),
   };
   options.onRequest?.(input);
-  await wait(mockConfig.aiDelayMs);
+  await wait(options.aiDelayMs ?? mockConfig.aiDelayMs);
   if (fail) throw new Error("제보를 정리하지 못했어요");
   const result = scenario.process(input.body, input);
   return {

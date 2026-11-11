@@ -1,0 +1,45 @@
+/* Native Pleos canvas, scaled uniformly for the local preview.
+   The outer frame always keeps 1707:1210 or 841:1210. */
+.vehicle-frame { position: relative; }
+.vehicle-frame .roadtown-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: calc(var(--pleos-panel-width) * 1px);
+  height: 1210px;
+  transform: scale(var(--preview-scale, 0));
+  transform-origin: top left;
+  container-type: inline-size;
+  overflow: hidden;
+}
+.vehicle-frame .app-shell,
+.vehicle-frame .app-body { height: 100%; min-height: 0; }
+.vehicle-frame .app-body { display: flex; flex-direction: column; }
+.vehicle-frame .topbar { flex-shrink: 0; }
+.vehicle-frame .main-content { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.vehicle-frame .main-content > :not(.workspace) { flex-shrink: 0; }
+.vehicle-frame .workspace,
+.vehicle-frame .workspace.has-overlay { flex: 1; min-height: 0; }
+.vehicle-frame .workspace-content { height: 100%; min-height: 0; }
+.vehicle-frame .feed-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.vehicle-frame .feed-panel > :not(.post-scroll) { flex-shrink: 0; }
+.vehicle-frame .post-scroll { flex: 1; height: 0; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+.vehicle-frame .driving-restriction-panel { height: 100%; min-height: 0; }
+.vehicle-frame .notification-empty { min-height: 0; }
+.vehicle-frame .voice-notification { flex: 1; min-height: 0; }
+.vehicle-frame .composer { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+.vehicle-frame .composer > * { flex-shrink: 0; }
+.vehicle-frame .composer .body-input { flex: 1; min-height: 150px; }
+.vehicle-frame .composer textarea { height: 100%; resize: none; }
+.vehicle-frame .report-overlay .voice-report { max-height: 100%; }
+
+/* Half-width layouts respond to the native app canvas, not the browser window. */
+@container (max-width: 900px) {
+  .vehicle-frame .topbar-subtitle { display: none; }
+  .vehicle-frame .main-content { padding-inline: 24px; }
+  .vehicle-frame .community-tab { padding: 12px; gap: 8px; }
+  .vehicle-frame .community-tab strong { font-size: 16px; }
+  .vehicle-frame .community-tab div > span { font-size: 11px; }
+  .vehicle-frame .feed-footer > span { display: none; }
+  .vehicle-frame .notification-message .notification-post h3 { font-size: 23px; }
+}

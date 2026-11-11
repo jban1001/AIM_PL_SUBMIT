@@ -1,7 +1,19 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 export function VehicleFrame({ children }: { children: ReactNode }) {
   const [halfWidth, setHalfWidth] = useState(false);
+  const frame = useRef<HTMLElement>(null);
+  const [scale, setScale] = useState(0);
+  const panelWidth = halfWidth ? 841 : 1707;
+  useEffect(() => {
+    const element = frame.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setScale(Math.min(entry.contentRect.width / panelWidth, entry.contentRect.height / 1210));
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [panelWidth]);
 
   return (
     <>
@@ -27,8 +39,10 @@ export function VehicleFrame({ children }: { children: ReactNode }) {
         </div>
       </div>
       <section
+        ref={frame}
         className={halfWidth ? "vehicle-frame half-width" : "vehicle-frame"}
         aria-label="Pleos 앱 미리보기"
+        style={{ "--preview-scale": scale } as CSSProperties}
       >
         <div className="roadtown-panel">{children}</div>
       </section>

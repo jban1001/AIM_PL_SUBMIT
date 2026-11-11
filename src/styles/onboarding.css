@@ -1,0 +1,50 @@
+.launch-screen {
+  min-height: 100svh;
+  background: #080808;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  position: relative;
+  padding: 64px 24px 150px;
+}
+.launch-logo { font-size: clamp(76px, 13vw, 156px); line-height: 1; letter-spacing: -.065em; font-weight: 900; }
+.launch-button { position: absolute; bottom: max(48px, env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; justify-content: center; gap: 24px; min-height: 60px; width: min(320px, calc(100% - 48px)); background: white; color: #151515; border-radius: 8px; font-size: 17px; font-weight: 650; }
+.launch-button:hover { background: #e9e9ed; }
+.preferences-screen { min-height: 100svh; background: #fafbfc; color: #252932; display: flex; flex-direction: column; }
+.preferences-topbar { display: flex; align-items: center; position: relative; height: 88px; padding: 0 36px; }
+.preferences-back { display: grid; place-items: center; width: 48px; height: 48px; color: #555c68; border-radius: 8px; }
+.preferences-back:hover { background: #eef0f4; }
+.preferences-brand { position: absolute; left: 50%; transform: translateX(-50%); font-size: 25px; font-weight: 850; letter-spacing: -1.3px; color: #7045cb; }
+.preferences-form { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 38px 32px 48px; }
+.preferences-heading { text-align: center; }
+.preferences-kicker { font-size: 14px; color: #7954bd; font-weight: 600; }
+.preferences-heading h1 { font-size: clamp(26px, 3.2vw, 40px); letter-spacing: -1.5px; line-height: 1.4; font-weight: 700; margin: 12px 0; outline: none; }
+.preferences-heading p { color: #777f8b; font-size: 16px; line-height: 1.8; }
+.preference-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; width: min(100%, 1000px); margin: 48px 0 36px; }
+.preference-option { cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; min-height: 230px; padding: 30px 12px 26px; border: 2px solid #e3e6ec; border-radius: 16px; background: #fff; transition: border-color .16s, background .16s; }
+.preference-option:hover { border-color: #b7a0df; }
+.preference-option.is-selected { background: #f4f0fc; border-color: #7045cb; }
+.preference-option input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.preference-option:has(input:focus-visible) { outline: 3px solid #ad93df; outline-offset: 5px; }
+.preference-check { position: absolute; top: 16px; right: 16px; width: 25px; height: 25px; display: grid; place-items: center; border: 1px solid #d9dee6; border-radius: 50%; color: #fff; }
+.is-selected .preference-check { background: #7045cb; border-color: #7045cb; }
+.preference-icon { display: grid; place-items: center; width: 88px; height: 88px; color: #6f7785; margin-bottom: 19px; }
+.is-selected .preference-icon { color: #7045cb; }
+.preference-option strong { font-size: 22px; letter-spacing: -.6px; font-weight: 650; }
+.preference-description { margin-top: 8px; color: #7b8390; font-size: 12px; text-align: center; line-height: 1.6; }
+.preferences-bottom { text-align: center; width: min(100%, 360px); }
+.preferences-bottom p { font-size: 14px; color: #7b8390; margin-bottom: 16px; min-height: 22px; }
+.preferences-submit { width: 100%; display: flex; align-items: center; justify-content: center; gap: 18px; background: #7045cb; color: #fff; font-size: 17px; font-weight: 600; min-height: 60px; border-radius: 8px; }
+.preferences-submit:hover:not(:disabled) { background: #5d36b0; }
+.preferences-submit:disabled { background: #e5e7ed; color: #8e96a3; opacity: 1; }
+@media (max-width: 700px) {
+  .preferences-topbar { height: 72px; padding: 0 16px; }
+  .preferences-form { padding: 24px 20px 32px; }
+  .preferences-heading p { font-size: 14px; max-width: 300px; margin-inline: auto; }
+  .preference-options { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 28px 0; max-width: 460px; }
+  .preference-option { min-height: 190px; padding: 22px 10px; }
+  .preference-icon { width: 64px; height: 64px; margin-bottom: 12px; }
+  .preference-option strong { font-size: 19px; }
+  .preference-check { width: 22px; height: 22px; top: 12px; right: 12px; }
+  .preference-description { font-size: 11px; }
+}

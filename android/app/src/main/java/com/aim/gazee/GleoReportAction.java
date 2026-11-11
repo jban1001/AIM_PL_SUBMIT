@@ -45,16 +45,15 @@ final class GleoReportAction {
             sendResponse(action, "fail", "A report request is already being processed.", null);
             return;
         }
-        String body = READ_ACTION.equals(action) ? "" : readReport(intent);
-        if (ACTION.equals(action) && body.isEmpty()) {
-            sendResponse(action, "asking", "A description of the road condition is required.", null);
-            return;
-        }
-        if (body.length() > 500) {
+        JSONObject report = READ_ACTION.equals(action) ? new JSONObject() : readReport(intent);
+        if (report.optString("body").length() > 500
+                || report.optString("location").length() > 200
+                || report.optString("condition").length() > 500
+                || report.optString("utterance").length() > 1_000) {
             sendResponse(action, "fail", "The report description is too long.", null);
             return;
         }
-        pending = body;
+        pending = report.toString();
         pendingAction = action;
         requestId = UUID.randomUUID().toString();
         sent = false;
@@ -81,18 +80,37 @@ final class GleoReportAction {
                 ? "[{\"confirmation\":\"제보가 등록되었어요.\"}]" : null);
     }
 
-    void finishRead(String id, String speech) {
+    void requestDetails(String id, String missing) {
+        if (!id.equals(requestId) || !ACTION.equals(pendingAction)) return;
+        String message;
+        if ("location".equals(missing)) {
+            message = "The driver needs to specify which road or place the report is about.";
+        } else if ("condition".equals(missing)) {
+            message = "The driver needs to describe what is happening at the named location.";
+        } else {
+            missing = "both";
+            message = "The driver needs to specify the location and describe what is happening there.";
+        }
+        finish("asking", message, "[{\"missingField\":" + JSONObject.quote(missing) + "}]");
+    }
+
+    void finishRead(String id, String title, double distanceMeters) {
         if (!id.equals(requestId) || !READ_ACTION.equals(pendingAction)) return;
-        if (speech == null || speech.trim().isEmpty() || speech.length() > 500) {
+        if (title == null || title.trim().isEmpty() || title.length() > 500) {
             finish("fail", "There is no received road report available to read.", null);
             return;
         }
         try {
-            String data = "[" + new JSONObject()
-                    .put("roadReport", speech)
+            JSONObject report = new JSONObject()
+                    .put("reportTitle", title)
                     .put("source", "Driver report")
-                    .put("verified", false) + "]";
-            finish("success", "A nearby road report is available for the driver.", data);
+                    .put("verified", false);
+            if (Double.isFinite(distanceMeters) && distanceMeters >= 0) {
+                report.put("approximateDistanceMeters", distanceMeters);
+            }
+            finish("success", "The latest driver report is available for a brief, courteous spoken update. "
+                    + "Describe the reported condition in a complete sentence and attribute it to the report.",
+                    "[" + report + "]");
         } catch (JSONException error) {
             finish("fail", "The road report could not be read.", null);
         }
@@ -131,20 +149,28 @@ final class GleoReportAction {
         }
     }
 
-    private static String readReport(Intent intent) {
-        String direct = intent.getStringExtra("reportTitle");
-        if (direct == null) direct = intent.getStringExtra("report"); // Older schema compatibility.
-        if (direct != null) return direct.trim();
-        String encoded = intent.getStringExtra("ACTION_PARAM");
-        if (encoded == null || encoded.length() > 2_000) return "";
+    private static JSONObject readReport(Intent intent) {
+        JSONObject report = new JSONObject();
         try {
-            Object payload = new JSONTokener(encoded).nextValue();
-            if (payload instanceof String) payload = new JSONTokener((String) payload).nextValue();
-            if (!(payload instanceof JSONObject)) return "";
-            JSONObject parameters = (JSONObject) payload;
-            return parameters.optString("reportTitle", parameters.optString("report", "")).trim();
+            JSONObject parameters = new JSONObject();
+            String encoded = intent.getStringExtra("ACTION_PARAM");
+            if (encoded != null && encoded.length() <= 4_000) {
+                Object payload = new JSONTokener(encoded).nextValue();
+                if (payload instanceof String) payload = new JSONTokener((String) payload).nextValue();
+                if (payload instanceof JSONObject) parameters = (JSONObject) payload;
+            }
+            String title = intent.getStringExtra("reportTitle");
+            if (title == null) title = intent.getStringExtra("report");
+            if (title == null) title = parameters.optString("reportTitle", parameters.optString("report", ""));
+            report.put("body", title.trim());
+            for (String field : new String[]{"location", "condition", "utterance"}) {
+                String value = intent.getStringExtra(field);
+                if (value == null && parameters.has(field)) value = parameters.optString(field, "");
+                if (value != null) report.put(field, value.trim());
+            }
         } catch (JSONException error) {
-            return "";
+            Log.w("GazeePleos", "Invalid Gleo report parameters");
         }
+        return report;
     }
 }

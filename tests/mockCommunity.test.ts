@@ -78,7 +78,7 @@ test("호출어는 본문에서 제거하고 유효하지 않은 발화는 AI �
   let calls = 0;
   await assert.rejects(
     processReport(congestion, "어…", "nearby", [], false, { onRequest: () => calls++ }),
-    /한 문장 더/,
+    /장소와 어떤 상황인지/,
   );
   assert.equal(calls, 0);
 });

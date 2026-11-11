@@ -1,4 +1,24 @@
 /* Vehicle app presentation. Simulation and delivery logic stay in their components. */
+.simulation-workspace { border-top: 1px solid #e3e7ee; padding: 20px 24px 24px; }
+.simulation-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 5px; border-radius: 10px; background: #f0f1f5; }
+.simulation-tabs button { min-height: 46px; padding: 10px; font-size: 14px; font-weight: 600; color: #6d7481; border: 1px solid transparent; border-radius: 7px; }
+.simulation-tabs button[aria-selected="true"] { background: #fff; color: #7045cb; border-color: #ded6ec; box-shadow: 0 2px 4px #18203308; }
+.simulation-scenario-panel { margin-top: 20px; }
+.simulation-scenario-heading h3 { color: #353c47; font-size: 17px; font-weight: 650; }
+.simulation-scenario-heading p { color: #737b88; font-size: 12px; margin-top: 6px; line-height: 1.7; }
+.simulation-steps { display: grid; grid-template-columns: 1fr 1fr; margin-top: 16px; gap: 16px; }
+.simulation-step { padding: 20px; border: 1px solid #e1e5ed; border-radius: 10px; background: #fafbfc; }
+.simulation-step-label { color: #6742af; font-weight: 650; font-size: 13px; }
+.simulation-step p { font-size: 14px; color: #454e5d; margin: 8px 0 16px; }
+.simulation-step button { width: 100%; justify-content: center; }
+.simulation-step small { display: block; font-size: 11px; color: #78808d; margin-top: 12px; line-height: 1.7; }
+@media (max-width: 600px) {
+  .simulation-workspace { padding: 16px; }
+  .simulation-tabs { grid-template-columns: 1fr 1fr; }
+  .simulation-tabs button { font-size: 12px; }
+  .simulation-steps { grid-template-columns: 1fr; }
+}
+
 @layer base {
   body { background: #e9ebef; color: #22252c; }
 }
@@ -154,4 +174,11 @@
   .vehicle-frame .notification-playback { flex-wrap: wrap; }
   .vehicle-frame .app-footer > span:last-child { display: none; }
   .notification-demo-actions { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+}
+
+/* 받아쓰기 자동 시연: 곧 눌릴 버튼을 강조 */
+.is-demo-pressed {
+  transform: scale(0.96);
+  box-shadow: 0 0 0 4px rgba(111, 71, 196, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }

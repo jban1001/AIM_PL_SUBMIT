@@ -10,11 +10,14 @@ import { DrivingRestrictionPanel } from "./components/DrivingRestrictionPanel";
 import { Composer } from "./components/Composer";
 import { VoiceReport } from "./components/VoiceReport";
 import { VehicleFrame } from "./components/VehicleFrame";
+import { AppOnboarding } from "./components/AppOnboarding";
+import { SimulationWorkspace } from "./components/SimulationWorkspace";
 import { Icon } from "./components/Icon";
 import {
   communities,
   mockConfig,
   type CommunityId,
+  type Category,
   type FeedView,
   type Post,
   type SpeechFault,
@@ -27,33 +30,43 @@ import {
   makeIncoming,
   nextPagePosts,
   pagePosts,
-  scenarioIncoming,
   wait,
   type ReportAIInput,
 } from "./services/mockCommunity";
 import { useReportFlow } from "./hooks/useReportFlow";
-import { listenWithPleos } from "./services/pleosMic";
-import { playNotificationChime } from "./services/notificationChime";
-import { normalizeGleoReport, validateGleoReportTitle, voiceCommandBody } from "./services/reportInput";
 import { useNotificationDelivery } from "./hooks/useNotificationDelivery";
 import {
   makeRearNotification,
+  type MockNotificationData,
   upsertReceivedPost,
   type CommunitySelectionState,
   type DrivingRestrictionState,
-  type MockNotificationData,
 } from "./domain/notifications";
-import { notificationScenarios } from "./scenarios/notifications";
+import {
+  DICTATION_REQUIRES_STOPPED,
+  notificationScenarios,
+  simulationTabs,
+} from "./scenarios/notifications";
+import { preferredPosts } from "./domain/preferences";
+
+import { listenWithPleos } from "./services/pleosMic";
+import { playNotificationChime } from "./services/notificationChime";
+import { normalizeGleoReport, reportInputError, voiceCommandBody, type MissingReportField } from "./services/reportInput";
 
 declare global {
   interface Window {
     GazeeGleo?: {
       ready(): void;
       complete(requestId: string, success: boolean): void;
-      completeRead(requestId: string, speech: string): void;
+      requestDetails(requestId: string, missing: MissingReportField): void;
+      completeRead(requestId: string, title: string, distanceMeters: number): void;
     };
   }
 }
+
+type GleoReportPayload = { body: string; location?: string; condition?: string; utterance?: string };
+
+const REAR_APPROACH_DELAY_MS = 15_000;
 
 type RelayDemo = {
   role: "front" | "rear";
@@ -61,25 +74,34 @@ type RelayDemo = {
   distance: number;
   publish: (post: Post) => void;
   showRear: () => void;
-  approach: () => void;
 };
 
 type Feed = { all: Post[]; visible: Post[]; pending: Post[]; scroll: number };
 type CommunityPostData = Record<CommunityId, Feed>;
 const ids: CommunityId[] = ["nearby", "direction", "destination"];
 const communityName = (id: CommunityId) => communities.find((item) => item.id === id)!.name;
-function initialFeeds(scenario = scenarios[0]) {
+// Board content is independent of the selected report simulation.
+const boardExamples = scenarios.flatMap((scenario) => scenario.examples);
+const boardSeeds = Object.fromEntries(
+  ids.map((id, index) => [id, {
+    ...scenarios[0],
+    id: `board-${id}`,
+    examples: [...boardExamples.slice(index), ...boardExamples.slice(0, index)],
+  }]),
+) as Record<CommunityId, (typeof scenarios)[number]>;
+function initialFeeds(preferredCategories: Category[]) {
   return Object.fromEntries(
     ids.map((id) => {
+      const scenario = boardSeeds[id];
       const all = createPosts(scenario, id);
       return [
         id,
         {
           all,
-          visible: pagePosts(all, 0),
+          visible: pagePosts(preferredPosts(all, preferredCategories), 0),
           pending:
             id === "nearby"
-              ? makeIncoming(scenario, id, scenario.simulation?.initialPendingCount ?? 2)
+              ? makeIncoming(scenario, id, 2)
               : [],
           scroll: 0,
         },
@@ -87,13 +109,17 @@ function initialFeeds(scenario = scenarios[0]) {
     }),
   ) as Record<CommunityId, Feed>;
 }
-function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: RelayDemo }) {
+function RoadtownPrototype({ onReset, preferredCategories, relay }: {
+  relay: RelayDemo;
+  onReset: () => void;
+  preferredCategories: Category[];
+}) {
   const [selected, setSelected] = useState<CommunitySelectionState>(relay.report?.community ?? "nearby");
   const receivedRelayId = useRef<string | null>(null);
   const gleoRequest = useRef<string | null>(null);
   const [scenarioId, setScenarioId] = useState(scenarios[0].id);
   const scenario = scenarios.find((item) => item.id === scenarioId)!;
-  const [feeds, setFeeds] = useState<CommunityPostData>(initialFeeds);
+  const [feeds, setFeeds] = useState<CommunityPostData>(() => initialFeeds(preferredCategories));
   const [vehicleState, setVehicleState] = useState<VehicleState>("driving");
   const driving = vehicleState === "driving";
   const drivingRestrictionState: DrivingRestrictionState = driving
@@ -120,11 +146,12 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
   const [calls, setCalls] = useState(0);
   const [lastInput, setLastInput] = useState<ReportAIInput | null>(null);
   const [clock, setClock] = useState(new Date());
-  const generation = useRef(0);
   const moreBusy = useRef(false);
   const online = useRef(!offline);
   online.current = !offline;
   const feed = feeds[selected];
+  const visiblePosts = preferredPosts(feed.visible, preferredCategories);
+  const pendingPosts = preferredPosts(feed.pending, preferredCategories);
   const community = communities.find((item) => item.id === selected)!;
   function updateFeed(id: CommunityId, update: (feed: Feed) => Feed) {
     setFeeds((prev) => ({ ...prev, [id]: update(prev[id]) }));
@@ -154,7 +181,7 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
       updateFeed(post.community, (current) => ({
         ...current,
         all: [post, ...current.all],
-        visible: [post, ...current.visible],
+        visible: [...preferredPosts([post], preferredCategories), ...current.visible],
         scroll: 0,
       }));
       if (relay.role === "front") relay.publish(post);
@@ -164,7 +191,7 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
       }
       if (mode === "touch") setSelected(post.community);
       setViewState(scenario.simulation?.afterReportView ?? "normal");
-      setToast("제보가 등록되었어요.");
+      setToast("제보가 등록되었습니다.");
     },
   });
   const session = flow.session;
@@ -177,10 +204,18 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
     enabled: tts,
     paused: !!speechActive || wakeListening || ttsTesting,
   });
-  const acceptGleo = useEffectEvent((requestId: string, body: string) => {
-    const title = normalizeGleoReport(body);
-    if (relay.role !== "front" || !validateGleoReportTitle(title)
-        || !flow.begin("voice", selected, scenario, title, "gleo")) {
+  const acceptGleo = useEffectEvent((requestId: string, report: GleoReportPayload) => {
+    const details = report.location !== undefined || report.condition !== undefined || report.utterance !== undefined
+      ? { location: report.location ?? "", condition: report.condition ?? "", utterance: report.utterance }
+      : undefined;
+    const title = normalizeGleoReport(report.body || (details ? `${details.location} ${details.condition}` : ""));
+    const issue = reportInputError(title, details);
+    if (issue) {
+      setToast(issue.message);
+      window.GazeeGleo?.requestDetails(requestId, issue.missing);
+      return;
+    }
+    if (relay.role !== "front" || !flow.begin("voice", selected, scenario, title, "gleo", details)) {
       window.GazeeGleo?.complete(requestId, false);
       return;
     }
@@ -190,14 +225,18 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
   const readForGleo = useEffectEvent((requestId: string) => {
     const received = Object.values(delivery.history).flat();
     const latest = received.sort((a, b) => b.receivedAt - a.receivedAt)[0];
-    window.GazeeGleo?.completeRead(requestId, latest?.speech ?? "");
+    window.GazeeGleo?.completeRead(
+      requestId,
+      latest?.post.summary ?? "",
+      latest?.distanceMeters ?? 0,
+    );
   });
   useEffect(() => {
     const bridge = window.GazeeGleo;
     if (!bridge) return;
     function receive(event: Event) {
-      const { id, body } = (event as CustomEvent<{ id: string; body: string }>).detail;
-      acceptGleo(id, body);
+      const { id, report } = (event as CustomEvent<{ id: string; report: GleoReportPayload }>).detail;
+      acceptGleo(id, report);
     }
     function read(event: Event) {
       readForGleo((event as CustomEvent<{ id: string }>).detail.id);
@@ -256,7 +295,8 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
     const incoming = handler.createEvent(selected);
     const event =
       delivery.history[selected].find((item) => item.post.id === incoming.post.id) ?? incoming;
-    receivePost(event);
+    if (preferredCategories.includes(event.post.category) || event.post.category === "기타") receivePost(event);
+    else setToast("선택하지 않은 관심 범주의 제보는 표시하지 않습니다.");
   }
 
   function receivePost(event: MockNotificationData) {
@@ -280,6 +320,7 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
     if (relay.role === "rear" && relay.report && !offline) receiveRelay(relay.report, relay.distance);
   }, [relay.role, relay.report, relay.distance, offline]);
 
+
   useEffect(() => {
     const id = setInterval(() => setClock(new Date()), 30_000);
     return () => clearInterval(id);
@@ -298,7 +339,7 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
           [selected]: {
             ...prev[selected],
             pending: [
-              ...scenarioIncoming(scenario, selected, prev[selected].all),
+              ...makeIncoming(boardSeeds[selected], selected, 1),
               ...prev[selected].pending,
             ].slice(0, 8),
           },
@@ -306,7 +347,7 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
       mockConfig.refreshMs,
     );
     return () => clearInterval(id);
-  }, [selected, offline, scenario]);
+  }, [selected, offline]);
   useEffect(() => {
     if (offline) {
       setLoading(false);
@@ -315,19 +356,18 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
     setLoading(true);
     const id = setTimeout(() => setLoading(false), mockConfig.delayMs);
     return () => clearTimeout(id);
-  }, [selected, offline, scenarioId]);
+  }, [selected, offline]);
   async function loadMore() {
     if (moreBusy.current || offline || loading || viewState !== "normal" || blocked) return;
     const target = selected;
-    if (!nextPagePosts(feeds[target].all, feeds[target].visible).length) return;
-    const version = generation.current;
+    if (!nextPagePosts(preferredPosts(feeds[target].all, preferredCategories), feeds[target].visible).length) return;
     moreBusy.current = true;
     setLoadingMore(true);
     await wait(mockConfig.delayMs);
-    if (version === generation.current && online.current)
+    if (online.current)
       updateFeed(target, (current) => ({
         ...current,
-        visible: [...current.visible, ...nextPagePosts(current.all, current.visible)],
+        visible: [...current.visible, ...nextPagePosts(preferredPosts(current.all, preferredCategories), current.visible)],
       }));
     moreBusy.current = false;
     setLoadingMore(false);
@@ -337,7 +377,7 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
     updateFeed(selected, (current) => ({
       ...current,
       all: [...current.pending, ...current.all],
-      visible: [...current.pending, ...current.visible],
+      visible: [...preferredPosts(current.pending, preferredCategories), ...current.visible],
       pending: [],
       scroll: 0,
     }));
@@ -354,17 +394,8 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
   }
   function changeScenario(id: string) {
     if (session) return;
-    generation.current += 1;
     setScenarioId(id);
     const next = scenarios.find((item) => item.id === id)!;
-    const nextFeeds = initialFeeds(next);
-    for (const id of ids)
-      for (const item of delivery.history[id]) {
-        nextFeeds[id].all = upsertReceivedPost(nextFeeds[id].all, item.post);
-        nextFeeds[id].visible = upsertReceivedPost(nextFeeds[id].visible, item.post);
-      }
-    setFeeds(nextFeeds);
-    setViewState(next.simulation?.initialView ?? "normal");
     setFailAI(next.simulation?.failFirstReport ?? false);
   }
   function testTtsOutput() {
@@ -406,19 +437,6 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
         </span>
       </header>
       <VehicleFrame>
-        {inPleos && (
-          <div className="vehicle-relay-bar">
-            <div>
-              <span className="vehicle-relay-badge">{relay.role === "front" ? "앞차 · 제보 차량" : "뒤차 · 수신 차량"}</span>
-              <span className="vehicle-relay-status" role="status">
-                {relay.role === "front"
-                  ? relay.report ? `등록 완료 · ${relay.report.summary}` : "같은 경로의 앞차와 뒤차 시연"
-                  : relay.distance > 500 ? "전방 850m · 수신 대기" : "전방 450m · 알림 구간 진입"}
-              </span>
-            </div>
-
-          </div>
-        )}
         <CommunityLayout
           vehicleState={vehicleState}
           time={clock.toLocaleTimeString("ko-KR", {
@@ -440,10 +458,19 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
                     : "같은 길을 지나는 운전자들의 제보를 확인하세요."}
                 </p>
               </div>
-              <span className="live-badge">
-                <span className={`status-dot ${offline ? "muted" : ""}`} />
-                {offline ? "연결 끊김" : "커뮤니티 연결됨"}
-              </span>
+              <div className="voice-guidance-control">
+                <span>수신 알림음 <strong>{tts ? "ON" : "OFF"}</strong></span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-label="새 제보 수신 알림음"
+                  aria-checked={tts}
+                  className={`toggle ${tts ? "on" : ""}`}
+                  onClick={() => setTts((value) => !value)}
+                >
+                  <span />
+                </button>
+              </div>
             </div>
             <CommunityTabs selected={selected} onChange={setSelected} />
             <div className="community-description">
@@ -488,11 +515,11 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
                       </div>
                     )}
                     {!offline && viewState === "normal" && (
-                      <NewPostNotification count={feed.pending.length} onApply={applyNew} />
+                      <NewPostNotification count={pendingPosts.length} onApply={applyNew} />
                     )}
                     <PostList
                       community={selected}
-                      posts={feed.visible}
+                      posts={visiblePosts}
                       loading={loading || viewState === "loading"}
                       empty={viewState === "empty"}
                       offline={offline}
@@ -502,7 +529,7 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
                           updateFeed(selected, (current) => ({ ...current, scroll: value }));
                       }}
                       onMore={loadMore}
-                      hasMore={nextPagePosts(feed.all, feed.visible).length > 0}
+                      hasMore={nextPagePosts(preferredPosts(feed.all, preferredCategories), feed.visible).length > 0}
                       loadingMore={loadingMore}
                       onRetry={() => setOffline(false)}
                       onDelete={removePost}
@@ -529,24 +556,15 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
               ) : (
                 driving && (
                   <DrivingRestrictionPanel
-                    voiceWake={
-                      window.GazeeMic
-                        ? {
-                            active: wakeListening,
-                            status: wakeStatus,
-                            onToggle: () => {
-                              setWakeStatus(wakeListening ? "" : "마이크 준비 중…");
-                              setWakeListening(!wakeListening);
-                            },
-                          }
-                        : undefined
-                    }
                     communityName={community.name}
                     notification={notification}
                     playback={delivery.stateFor(notification?.post.id ?? "")}
                     enabled={tts}
-                    onToggle={() => setTts((value) => !value)}
-                    offline={offline}
+                    voiceWake={window.GazeeMic ? {
+                      active: wakeListening,
+                      status: wakeStatus,
+                      onToggle: () => setWakeListening((value) => !value),
+                    } : undefined}
                     onPlay={() => {
                       if (notification) delivery.retryChime(notification);
                     }}
@@ -569,20 +587,17 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
       </VehicleFrame>
       <DemoControls className="simulation-console" aria-label="시연 조작 영역">
         {inPleos && <summary>시연 조작 열기</summary>}
-        {inPleos && (
-          <div className="relay-demo-controls" aria-label="앞차와 뒤차 시연 제어">
-            <strong>{relay.role === "front" ? "앞차 시연" : "뒤차 시연"}</strong>
-            {relay.role === "front" ? (
-              <button type="button" className="secondary-button" disabled={!relay.report} onClick={relay.showRear}>
-                뒤차로 전환
-              </button>
-            ) : (
-              <button type="button" className="secondary-button" disabled={relay.distance <= 500} onClick={relay.approach}>
-                450m로 접근
-              </button>
-            )}
-          </div>
-        )}
+        <div className="relay-demo-controls" aria-label="앞차와 뒤차 시연 제어">
+          <span className="vehicle-relay-badge">{relay.role === "front" ? "앞차 · 제보 차량" : "뒤차 · 수신 차량"}</span>
+          <span className="vehicle-relay-status" role="status">
+            {relay.role === "front"
+              ? relay.report ? `등록 완료 · ${relay.report.summary}` : "같은 경로의 앞차와 뒤차 시연"
+              : relay.distance > 500 ? "전방 850m · 접근 중" : "전방 450m · 알림 구간 진입"}
+          </span>
+          {relay.role === "front" && (
+            <button type="button" className="secondary-button" disabled={!relay.report} onClick={relay.showRear}>뒤차로 전환</button>
+          )}
+        </div>
         <div className="console-top">
           <div className="console-label">
             <span className="console-icon">
@@ -590,7 +605,7 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
             </span>
             <div>
               <h2>시뮬레이션</h2>
-              <p>이 영역은 차량 디스플레이에 포함되지 않습니다.</p>
+              <p>역할·거리·가상 주행 상태를 조작하는 시연 전용 영역입니다.</p>
             </div>
           </div>
           <div className="vehicle-control">
@@ -614,45 +629,15 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
             </div>
           </div>
           <div className="notification-demo-actions">
-            <button
-              type="button"
-              className="receive-scenario-button"
-              onClick={testTtsOutput}
-              disabled={ttsTesting || busy || wakeListening}
-            >
-              <Icon name="speaker" size={17} />
-              알림음 테스트
+            <button type="button" className="receive-scenario-button" onClick={testTtsOutput} disabled={ttsTesting || busy || wakeListening}>
+              <Icon name="speaker" size={17} />알림음 테스트
             </button>
-            {notificationScenarios.map((item) => (
-              <button
-                key={item.id}
-                className="receive-scenario-button"
-                disabled={offline}
-                onClick={() => receiveScenario(item.id)}
-              >
-                <Icon name="spark" size={17} />
-                {item.name}
-              </button>
-            ))}
+            {ttsTestStatus && <span role="status">{ttsTestStatus}</span>}
             <button className="reset-demo-button" onClick={onReset}>
               <Icon name="refresh" size={16} />
               시연 초기화
             </button>
           </div>
-          {ttsTestStatus && (
-            <div role="status" className="notification-event-trace">
-              <span>{ttsTestStatus}</span>
-            </div>
-          )}
-          <button
-            className="speech-trigger"
-            disabled={!driving || busy}
-            onClick={() => flow.begin("voice", selected, scenario)}
-          >
-            <Icon name="mic" size={19} />
-            ‘제보할게’ 발화 시연
-            <Icon name="arrow" size={16} />
-          </button>
           <button
             className="settings-toggle"
             onClick={() => setDemoOpen((value) => !value)}
@@ -662,6 +647,24 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
             <Icon name="down" size={15} />
           </button>
         </div>
+        <SimulationWorkspace
+          scenarioId={scenarioId}
+          disabled={!!session}
+          canReport={!busy && !offline}
+          canReceive={!offline && !session}
+          onSelect={changeScenario}
+          onReport={() => {
+            const tab = simulationTabs.find((item) => item.reportScenarioId === scenarioId);
+            if (tab?.reportMode !== "dictation") {
+              flow.begin("voice", selected, scenario);
+              return;
+            }
+            if (driving) setToast(DICTATION_REQUIRES_STOPPED);
+            else if (session) setToast("작성 중인 제보를 먼저 등록하거나 취소해 주세요.");
+            else flow.beginDictationDemo(selected, scenario, tab.speed);
+          }}
+          onReceive={receiveScenario}
+        />
         {demoOpen && (
           <div className="console-details">
             <div className="notification-event-trace">
@@ -774,7 +777,7 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
                 onClick={() =>
                   updateFeed(selected, (current) => ({
                     ...current,
-                    pending: [...makeIncoming(scenario, selected, 2), ...current.pending],
+                    pending: [...makeIncoming(boardSeeds[selected], selected, 2), ...current.pending],
                   }))
                 }
               >
@@ -808,17 +811,28 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
 
 export default function App() {
   const [demoVersion, setDemoVersion] = useState(0);
+  const [preferredCategories, setPreferredCategories] = useState<Category[] | null>(null);
   const [role, setRole] = useState<RelayDemo["role"]>("front");
   const [report, setReport] = useState<Post | null>(null);
   const [distance, setDistance] = useState(850);
+  useEffect(() => {
+    if (role !== "rear" || !report) return;
+    const timer = window.setTimeout(() => setDistance(450), REAR_APPROACH_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [role, report]);
+
   function reset() {
     setRole("front");
     setReport(null);
     setDistance(850);
     setDemoVersion((value) => value + 1);
   }
+  if (!preferredCategories) return <div className={window.GazeeMic ? "pleos-app onboarding-host" : "onboarding-host"}>
+    <AppOnboarding onComplete={setPreferredCategories} />
+  </div>;
   return (
     <RoadtownPrototype
+      preferredCategories={preferredCategories}
       key={`${demoVersion}-${role}`}
       onReset={reset}
       relay={{
@@ -827,7 +841,6 @@ export default function App() {
         distance,
         publish: setReport,
         showRear: () => { setRole("rear"); window.scrollTo(0, 0); },
-        approach: () => { setDistance(450); window.scrollTo(0, 0); },
       }}
     />
   );

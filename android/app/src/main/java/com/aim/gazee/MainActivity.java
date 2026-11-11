@@ -207,7 +207,7 @@ public final class MainActivity extends Activity {
     }
 
     private void dispatchGleoReport(String id, String report) {
-        String detail = "{id:" + JSONObject.quote(id) + ",body:" + JSONObject.quote(report) + "}";
+        String detail = "{id:" + JSONObject.quote(id) + ",report:" + report + "}";
         webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('gazee-gleo-report',{detail:"
                 + detail + "}))", null);
     }
@@ -234,8 +234,13 @@ public final class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void completeRead(String id, String speech) {
-            runOnUiThread(() -> gleo.finishRead(id, speech));
+        public void requestDetails(String id, String missing) {
+            runOnUiThread(() -> gleo.requestDetails(id, missing));
+        }
+
+        @JavascriptInterface
+        public void completeRead(String id, String title, double distanceMeters) {
+            runOnUiThread(() -> gleo.finishRead(id, title, distanceMeters));
         }
     }
 

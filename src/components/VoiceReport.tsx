@@ -15,6 +15,7 @@ export function VoiceReport({
   const failed = ["stt-error", "insufficient", "ai-error"].includes(session.phase);
   const processing = session.phase === "processing";
   const success = session.phase === "success";
+  const micPreparing = session.phase === "listening" && session.voiceInput === "mic" && !session.microphoneReady;
   return (
     <section className={`voice-report ${failed ? "voice-failed" : ""}`} aria-label="음성 제보">
       <div className="voice-topline">
@@ -32,21 +33,21 @@ export function VoiceReport({
         {success
           ? "제보가 등록되었어요."
           : processing
-            ? "제보를 정리하는 중이에요"
+            ? (session.voiceInput === "gleo" ? "제보를 등록하는 중이에요" : "제보를 정리하는 중이에요")
             : failed
               ? session.error
-              : "듣고 있어요"}
+              : micPreparing ? "마이크를 준비하고 있어요" : "듣고 있어요"}
       </h2>
       <p className="voice-subtitle">
         {success
           ? "등록 대상 커뮤니티에만 추가했어요."
           : processing
-            ? "원본 발화·모의 차량 데이터·유사 제보를 한 번에 처리해요."
+            ? "장소와 상황이 확인된 제보를 등록하고 있어요."
             : failed
               ? "유효한 제보가 확보되기 전에는 게시하지 않습니다."
-              : "지금 보이는 도로 상황을 편하게 말해 주세요."}
+              : "어느 장소에서 어떤 상황인지 말해 주세요."}
       </p>
-      {session.phase === "listening" && (
+      {session.phase === "listening" && !micPreparing && (
         <div className="voice-wave" aria-hidden="true">
           {Array.from({ length: 33 }, (_, i) => (
             <i
@@ -62,7 +63,7 @@ export function VoiceReport({
           <p>{session.body || "발화를 기다리고 있어요…"}</p>
         </div>
       )}
-      {processing && (
+      {processing && session.voiceInput !== "gleo" && (
         <div className="processing-steps">
           <span>
             <Icon name="check" size={14} />
