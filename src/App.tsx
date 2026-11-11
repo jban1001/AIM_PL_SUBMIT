@@ -215,7 +215,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
       window.GazeeGleo?.requestDetails(requestId, issue.missing);
       return;
     }
-    if (relay.role !== "front" || !flow.begin("voice", selected, scenario, title, "gleo", details)) {
+    if (!flow.begin("voice", selected, scenario, title, "gleo", details)) {
       window.GazeeGleo?.complete(requestId, false);
       return;
     }
@@ -455,7 +455,9 @@ function RoadtownPrototype({ onReset, preferredCategories, relay }: {
                 <p className="state-subtitle">
                   {driving
                     ? "새 제보는 알림음으로, 내용은 Gleo에게 요청해 들으세요."
-                    : "같은 길을 지나는 운전자들의 제보를 확인하세요."}
+                    : inPleos
+                      ? "Gleo에게 장소와 상황을 말해 제보할 수 있어요."
+                      : "같은 길을 지나는 운전자들의 제보를 확인하세요."}
                 </p>
               </div>
               <div className="voice-guidance-control">
