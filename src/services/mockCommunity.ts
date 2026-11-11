@@ -6,7 +6,7 @@ import {
   type Post,
   type Scenario,
 } from "../domain/types.ts";
-import { normalizeReportBody, validateReportBody } from "./reportInput.ts";
+import { normalizeReportBody, validateGleoReportTitle, validateReportBody } from "./reportInput.ts";
 
 export const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -63,6 +63,7 @@ export interface ReportAIInput {
   similarPosts: Post[];
 }
 export interface ReportOptions {
+  gleoTitle?: boolean;
   vehicleDataAvailable?: boolean;
   similarPostsAvailable?: boolean;
   source?: InputMode;
@@ -78,7 +79,7 @@ export async function processReport(
 ): Promise<Post> {
   if (!body.trim()) throw new Error("내용을 입력해 주세요.");
   const originalBody = normalizeReportBody(body);
-  if (!validateReportBody(originalBody)) throw new Error("어떤 상황인지 한 문장 더 말해 주세요");
+  if (!(options.gleoTitle ? validateGleoReportTitle(originalBody) : validateReportBody(originalBody))) throw new Error("어떤 상황인지 한 문장 더 말해 주세요");
   // Snapshot inputs at report time, before the simulated single Gemini call.
   const input: ReportAIInput = {
     body: originalBody,

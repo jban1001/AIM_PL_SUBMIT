@@ -34,7 +34,7 @@ import {
 import { useReportFlow } from "./hooks/useReportFlow";
 import { listenWithPleos } from "./services/pleosMic";
 import { playNotificationChime } from "./services/notificationChime";
-import { validateReportBody, voiceCommandBody } from "./services/reportInput";
+import { normalizeGleoReport, validateGleoReportTitle, voiceCommandBody } from "./services/reportInput";
 import { useNotificationDelivery } from "./hooks/useNotificationDelivery";
 import {
   makeRearNotification,
@@ -178,8 +178,9 @@ function RoadtownPrototype({ onReset, relay }: { onReset: () => void; relay: Rel
     paused: !!speechActive || wakeListening || ttsTesting,
   });
   const acceptGleo = useEffectEvent((requestId: string, body: string) => {
-    if (relay.role !== "front" || !validateReportBody(body)
-        || !flow.begin("voice", selected, scenario, body, "gleo")) {
+    const title = normalizeGleoReport(body);
+    if (relay.role !== "front" || !validateGleoReportTitle(title)
+        || !flow.begin("voice", selected, scenario, title, "gleo")) {
       window.GazeeGleo?.complete(requestId, false);
       return;
     }

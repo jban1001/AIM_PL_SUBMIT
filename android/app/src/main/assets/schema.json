@@ -9,17 +9,17 @@
       "function": {
         "name": "GAZEE_CREATE_REPORT",
         "component": "service",
-        "description": "Registers a road condition report that the driver has explicitly asked GAZEE to share.",
+        "description": "Registers a concise road-condition report title derived from the driver's explicit request to share an observation.",
         "parameters": {
           "type": "object",
           "properties": {
-            "report": {
+            "reportTitle": {
               "type": "string",
-              "description": "The driver's road condition description, retaining the road name and observed condition."
+              "description": "A concise Korean road-condition title containing the driver's stated location and situation, without assistant or app invocation names or report-submission commands. The title retains stated uncertainty, negation, direction, and timing without adding causes or observations."
             }
           },
           "required": [
-            "report"
+            "reportTitle"
           ]
         }
       }

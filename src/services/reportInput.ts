@@ -13,6 +13,31 @@ export function voiceCommandBody(transcript: string): string | null {
   return command ? text.slice(command[0].length).replace(/^[\s,.!?…"'”’。]+/u, "").trim() : null;
 }
 
+// Gleo creates the title. This only removes command wrappers if they leak through;
+// it does not infer traffic conditions or rewrite uncertainty/negation.
+export function normalizeGleoReport(body: string): string {
+  let text = normalizeReportBody(body);
+  const app = String.raw`(?:가지|가제|gazee)(?:\s*(?:앱|어플|커뮤니티))?\s*(?:에다가|으로|에|로)`;
+  for (let pass = 0; pass < 3; pass++) {
+    const previous = text;
+    text = text
+      .replace(/^(?:글레오|글래오|gleo)(?:야|아)?(?=$|[\s,，:])\s*[,，:]?\s*/iu, "")
+      .replace(new RegExp(`^${app}(?=$|[\\s,，:])[\\s,，:]*`, "iu"), "");
+    text = voiceCommandBody(text) ?? text;
+    text = text.replace(new RegExp(
+      `(?:\\s+${app})?\\s*(?:(?:도로|교통)\\s*)?(?:제보(?:를)?\\s*)?(?:제보|등록|공유)(?:를|을)?\\s*해\\s*(?:줘(?:요)?|주세요|주실래요|줄래(?:요)?)[\\s.!。]*$`,
+      "iu",
+    ), "").trim();
+    if (text === previous) break;
+  }
+  return text;
+}
+
+// Short, already summarized Gleo titles need fewer characters than raw reports.
+export function validateGleoReportTitle(body: string) {
+  return normalizeGleoReport(body).replace(/[\s.…!?]/g, "").length >= 4;
+}
+
 export function validateReportBody(body: string) {
   return normalizeReportBody(body).replace(/[\s.…!?]/g, "").length >= mockConfig.minReportChars;
 }

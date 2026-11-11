@@ -8,7 +8,7 @@ import {
   type SpeechFault,
 } from "../domain/types";
 import { processReport, type ReportOptions } from "../services/mockCommunity";
-import { normalizeReportBody, validateReportBody } from "../services/reportInput";
+import { normalizeReportBody, validateGleoReportTitle, validateReportBody } from "../services/reportInput";
 import { listenWithPleos } from "../services/pleosMic";
 
 export type ReportPhase =
@@ -95,7 +95,7 @@ export function useReportFlow(props: FlowProps) {
     const snapshot = current.current;
     if (!snapshot || busy.current) return;
     const body = normalizeReportBody(text ?? snapshot.body);
-    if (!validateReportBody(body)) {
+    if (!(snapshot.voiceInput === "gleo" ? validateGleoReportTitle(body) : validateReportBody(body))) {
       patch({ body, phase: "insufficient", error: "어떤 상황인지 한 문장 더 말해 주세요" });
       return;
     }
@@ -117,7 +117,7 @@ export function useReportFlow(props: FlowProps) {
         snapshot.community,
         latest.current.getPosts(snapshot.community),
         options.fail,
-        { ...options, source: snapshot.mode },
+        { ...options, source: snapshot.mode, gleoTitle: snapshot.voiceInput === "gleo" },
       );
       if (!alive.current || current.current?.id !== snapshot.id) return;
       latest.current.onPublished(post, snapshot.mode, snapshot.voiceInput);

@@ -223,3 +223,17 @@ GAZEE의 WebView·음성 큐·Android 대체 엔진을 제외하고, Pleos TextT
 실제 차량 상태 P에서 앱 내부의 주행 모드와 앞차/뒤차 역할·거리·게시글 공유를 시뮬레이션했다. 실제 두 차량 간 통신, 실제 주행 시 허용 범위, 생산 차량 스피커 출력은 검증하지 않았다. 기존 CarUxRestrictions 보호를 유지했다. Gleo 읽기는 Gleo 서비스/네트워크 상태의 영향을 받는다. 게시글 정리와 차량 근거는 기존 Mock 동작이다.
 
 참조: https://developer.android.com/reference/android/media/AudioTrack , https://developer.android.com/reference/android/media/AudioAttributes#USAGE_NOTIFICATION
+
+## 2026-11-11 Gleo 제보 제목 정리
+
+- CREATE Action의 파라미터를 `reportTitle`로 명확히 정의했다. 영어 description 두 문장으로 '사용자가 말한 장소·상황을 담은 간결한 한국어 제목'이라는 의미, 호출명/등록 명령 제외, 부정·불확실성·방향·시간 보존을 설명했다. 기존 `report` 입력도 Android에서 계속 수신한다. READ Action과 기존 권한 보호는 변경하지 않았다.
+- `normalizeGleoReport`는 Gleo 입력 경로에서 호출명·앱 대상·명시적인 등록 요청 표현만 제거한다. 정체·사고 원인을 추론하거나 자연어 요약을 흉내내는 함수가 아니다. 실제 제목 요약은 Gleo가 한다. 별도 Gemini 호출은 추가하지 않았다.
+- 짧은 '인천대교 막힘'이 기존 본문 8자 검사에서 실패하는 것을 실제 테스트에서 발견했다. Gleo 제목은 4자 이상으로 검증하고, 일반 본문 입력의 8자 기준은 유지했다. 이 구분을 수신·작성·저장 단계에 동일하게 적용했다.
+- 최초 시험의 '가지에'는 Gleo STT가 '바지에'로 인식했다. 이 경우 모델 출력에도 '바지에'가 남았으며, 잘못 인식한 앱 이름을 임의의 도로명처럼 제거하는 규칙은 만들지 않았다. 이후 '지금 가지 앱에 인천대교 막힌다고 제보해 줘'라는 입력은 정상 인식됐다.
+- 최종 APK의 실제 Gleo ACTIONPLANNER 출력: `reportTitle: "인천대교 막힘"`. WebView 수신 이벤트에서 같은 제목을 확인했고, 등록 성공 콜백과 '등록 완료 · 인천대교 막힘' 상태를 확인했다.
+- 뒤차 850m에서는 카드 없음, 450m에서 '인천대교 막힘' 카드 및 알림음 started/done 확인. 사용자 요청 이후 READ Action 성공, Gleo가 '가지앱에서 방금 받은 도로 정보는 전방 약 450미터 앞차 제보로 인천대교 막힘이에요.'라고 응답했고 MP3 재생 완료 확인.
+- TypeScript 검사, React/Vite 번들, APK 빌드 및 설치 성공. 테스트 36개 통과. 추가 테스트는 호출 표현 제거, 내용 없는 제보 거절, 짧은 Gleo 제목 등록과 기존 본문 기준 유지, 부정/불확실성/시간/도로명 보존, 시나리오 예시로 덮어쓰지 않고 저장하는 동작을 검증한다.
+- 테스트 요청은 Windows 합성 음성을 에뮬레이터 마이크에 주입했다. Gleo 호출창은 명시적으로 열었으며 실제 핫워드 검출 자체를 검증한 것은 아니다. 차량 P 상태에서 앱 내부 주행 시연으로 검증했다. 음성 인식 오류와 생성 모델의 모든 표현에 대해 제목 품질을 보장하는 것은 아니다.
+- 변경 파일: `assets/schema.json`, `GleoReportAction.java`, `App.tsx`, `reportInput.ts`, `useReportFlow.ts`, `mockCommunity.ts`, `tests/gleo-title.test.ts`, Android README 및 본 검증 기록. 이전 파일은 작업 공간 `.gazee-work/before-gleo-title`에 백업했다. GitHub push는 하지 않았다.
+
+공식 명세: https://document.pleos.ai/docs/pleos-only/app-integration-guide/guide/app-capability

@@ -132,14 +132,17 @@ final class GleoReportAction {
     }
 
     private static String readReport(Intent intent) {
-        String direct = intent.getStringExtra("report");
+        String direct = intent.getStringExtra("reportTitle");
+        if (direct == null) direct = intent.getStringExtra("report"); // Older schema compatibility.
         if (direct != null) return direct.trim();
         String encoded = intent.getStringExtra("ACTION_PARAM");
         if (encoded == null || encoded.length() > 2_000) return "";
         try {
             Object payload = new JSONTokener(encoded).nextValue();
             if (payload instanceof String) payload = new JSONTokener((String) payload).nextValue();
-            return payload instanceof JSONObject ? ((JSONObject) payload).optString("report", "").trim() : "";
+            if (!(payload instanceof JSONObject)) return "";
+            JSONObject parameters = (JSONObject) payload;
+            return parameters.optString("reportTitle", parameters.optString("report", "")).trim();
         } catch (JSONException error) {
             return "";
         }
