@@ -494,6 +494,22 @@ public final class MainActivity extends Activity {
 
     private final class SpeechInterface {
         @JavascriptInterface
+        public void speakSdk(String id, String text) {
+            runOnUiThread(() -> {
+                if (webView == null || id == null || id.length() > 80) return;
+                if (!foreground || !canInteract) {
+                    dispatchSpeechEvent(id, "error", "차량 주행 제한 상태에서는 안내할 수 없어요.");
+                } else if (text == null || text.trim().isEmpty() || text.length() > 500) {
+                    dispatchSpeechEvent(id, "error", "안내할 문장을 읽을 수 없어요.");
+                } else {
+                    microphone.interrupt();
+                    chime.stop();
+                    speech.speakSdk(id, text);
+                }
+            });
+        }
+
+        @JavascriptInterface
         public void speak(String id, String text) {
             runOnUiThread(() -> {
                 if (webView == null) return;

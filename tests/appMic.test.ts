@@ -134,3 +134,37 @@ test("중간에 인용된 종료 문구 뒤에 말이 이어지면 종료하지 
   t.mock.timers.tick(250);
   assert.equal(h.ids.length, 2);
 });
+
+test("중간 결과 후 긴 쉼에도 입력을 유지하고 종료 명령까지 이어 듣는다", (t) => {
+  const h = setup(t);
+  listenWithAppMic(h.callbacks, { report: true });
+  h.emit("ready");
+  h.emit("partial", "인천대교 정체");
+  h.emit("idle");
+  t.mock.timers.tick(250);
+  h.emit("ready");
+  t.mock.timers.tick(20_000);
+  h.emit("idle");
+  t.mock.timers.tick(250);
+  h.emit("ready");
+  assert.deepEqual(h.errors, []);
+  assert.deepEqual(h.results, []);
+  h.emit("result", "제보해줘.");
+  assert.deepEqual(h.results, ["인천대교 정체"]);
+  assert.equal(h.deadlines.length, 1);
+});
+
+test("중간 종료 문구만 남고 침묵해도 자동 등록하지 않고 60초에 끝난다", (t) => {
+  const h = setup(t);
+  listenWithAppMic(h.callbacks, { report: true });
+  h.emit("ready");
+  h.emit("partial", "인천대교 정체 제보해줘");
+  h.emit("idle");
+  t.mock.timers.tick(250);
+  h.emit("ready");
+  t.mock.timers.tick(REPORT_LISTEN_MS - 250);
+  assert.deepEqual(h.results, []);
+  assert.equal(h.errors.length, 1);
+  assert.match(h.errors[0], /60초/);
+  assert.equal(h.partials.at(-1), "인천대교 정체 제보해줘");
+});

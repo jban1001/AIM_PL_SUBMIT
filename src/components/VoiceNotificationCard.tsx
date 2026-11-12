@@ -7,12 +7,14 @@ export function VoiceNotificationCard({
   playback,
   enabled,
   onPlay,
+  speechAction,
   readOnly = false,
 }: {
   notification: MockNotificationData;
   playback: TTSPlaybackState;
   enabled: boolean;
   onPlay: () => void;
+  speechAction?: { onPlay: () => void; enabled: boolean; status: string; playing: boolean };
   readOnly?: boolean;
 }) {
   const playing = playback.status === "playing";
@@ -46,6 +48,14 @@ export function VoiceNotificationCard({
             )}
           </div>
           <p className="notification-quote">“{notification.speech}”</p>
+          {speechAction && <div className="notification-playback">
+            <button type="button" className="secondary-button" onClick={speechAction.onPlay}
+              disabled={!speechAction.enabled}>
+              <Icon name="speaker" size={16} />
+              {speechAction.playing ? "음성 안내 중…" : "제보글 음성 출력"}
+            </button>
+            <span role="status">{speechAction.status || "버튼을 누르면 도착한 제보를 읽어 드려요."}</span>
+          </div>}
           <div className="notification-playback">
             <span role="status">
               <span className={`status-dot ${playing ? "" : "muted"}`} />

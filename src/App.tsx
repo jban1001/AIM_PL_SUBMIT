@@ -56,6 +56,7 @@ import {
 import { preferredPosts } from "./domain/preferences";
 
 import { listenWithAppMic } from "./services/appMic";
+import { playMockTTS } from "./services/mockTTS";
 import { playNotificationChime } from "./services/notificationChime";
 import { matchesDemoUtterance, normalizeGleoReport, reportInputError, voiceCommandBody, type MissingReportField } from "./services/reportInput";
 
@@ -238,6 +239,8 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
   const [wakeStatus, setWakeStatus] = useState("");
   const [ttsTestStatus, setTtsTestStatus] = useState("");
   const [ttsTesting, setTtsTesting] = useState(false);
+  const [reportSpeechStatus, setReportSpeechStatus] = useState("");
+  const reportSpeechController = useRef<AbortController | null>(null);
   const ttsTestController = useRef<AbortController | null>(null);
   const [offline, setOffline] = useState(false);
   const [viewState, setViewState] = useState<FeedView>(
@@ -537,6 +540,37 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
     const next = scenarios.find((item) => item.id === id)!;
     setFailAI(next.simulation?.failFirstReport ?? false);
   }
+  function readReceivedReport() {
+    if (!notification || ttsTesting || reportSpeechController.current || session || wakeListening || vehicleScreen !== "NORMAL") return;
+    const controller = new AbortController();
+    reportSpeechController.current = controller;
+    setTtsTesting(true);
+    setReportSpeechStatus("Pleos TTS 준비 중…");
+    void playMockTTS(notification.speech, {
+      signal: controller.signal, manual: true, sdkOnly: true,
+      onProgress: setReportSpeechStatus,
+      onStart: (engine) => setReportSpeechStatus(`제보 음성 안내 중 · ${engine}`),
+    }).then((engine) => {
+      if (!controller.signal.aborted) setReportSpeechStatus(`제보 음성 안내 완료 · ${engine}`);
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted) setReportSpeechStatus(`음성 안내 실패 · ${error instanceof Error ? error.message : "알 수 없는 오류"}`);
+    }).finally(() => {
+      if (reportSpeechController.current === controller) {
+        reportSpeechController.current = null;
+        setTtsTesting(false);
+      }
+    });
+  }
+  useEffect(() => {
+    if (session || wakeListening || vehicleScreen !== "NORMAL") {
+      reportSpeechController.current?.abort();
+      setReportSpeechStatus("");
+    }
+  }, [session?.id, wakeListening, vehicleScreen]);
+  useEffect(() => {
+    setReportSpeechStatus("");
+    return () => { reportSpeechController.current?.abort(); };
+  }, [notification?.post.id, selected, scenarioId]);
   function testTtsOutput() {
     if (ttsTestController.current || busy || wakeListening) return;
     const controller = new AbortController();
@@ -710,6 +744,12 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
                     notification={notification}
                     publishedPost={publishedPost}
                     playback={delivery.stateFor(notification?.post.id ?? "")}
+                    speechAction={{
+                      onPlay: readReceivedReport,
+                      enabled: !!notification && !session && !wakeListening && !ttsTesting && vehicleScreen === "NORMAL",
+                      status: reportSpeechStatus,
+                      playing: !!reportSpeechController.current && ttsTesting,
+                    }}
                     enabled
                     voiceAction={window.GazeeMic ? (
                       relay.role === "front"

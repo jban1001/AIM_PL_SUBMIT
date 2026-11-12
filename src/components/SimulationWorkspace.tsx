@@ -70,6 +70,7 @@ export function SimulationWorkspace({ scenarioId, disabled, canReport, canReceiv
               <Icon name="speaker" size={18} />{active.name} 제보 수신 시연
             </button>
             <small>카드가 나타나고 짧은 알림음이 한 번 울려요.</small>
+            <small>도착한 제보 카드의 ‘제보글 음성 출력’을 누르면 음성으로 안내해요.</small>
           </div>
         </div>
       </section>

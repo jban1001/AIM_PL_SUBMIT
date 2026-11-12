@@ -40,9 +40,13 @@ final class PleosSpeech {
         audio = context.getSystemService(AudioManager.class);
     }
 
-    void speak(String id, String text) {
+    void speak(String id, String text) { speak(id, text, true); }
+
+    void speakSdk(String id, String text) { speak(id, text, false); }
+
+    private void speak(String id, String text, boolean allowFallback) {
         stop();
-        Request request = new Request(id, text);
+        Request request = new Request(id, text, allowFallback);
         active = request;
         progress(request, "Pleos ON_DEVICE 초기화 중");
         armWatchdog(request, 8_000);
@@ -113,6 +117,10 @@ final class PleosSpeech {
 
     private void fallbackToAndroid(Request request, String reason) {
         if (active != request || request.androidFallback) return;
+        if (!request.allowFallback) {
+            finish(request, "error", reason);
+            return;
+        }
         request.androidFallback = true;
         request.started = false;
         request.pleosFailure = reason;
@@ -257,6 +265,7 @@ final class PleosSpeech {
     private final class Request implements EventListener {
         private final String id;
         private final String text;
+        private final boolean allowFallback;
         private TextToSpeech pleos;
         private android.speech.tts.TextToSpeech systemTts;
         private AudioFocusRequest focus;
@@ -274,9 +283,10 @@ final class PleosSpeech {
             }
         };
 
-        Request(String id, String text) {
+        Request(String id, String text, boolean allowFallback) {
             this.id = id;
             this.text = text;
+            this.allowFallback = allowFallback;
         }
 
         @Override public void onStart() {

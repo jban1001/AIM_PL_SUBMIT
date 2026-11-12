@@ -12,6 +12,7 @@ export function DrivingRestrictionPanel({
   enabled,
   onPlay,
   voiceAction,
+  speechAction,
   readOnly = false,
 }: {
   communityName: string;
@@ -20,6 +21,7 @@ export function DrivingRestrictionPanel({
   playback: TTSPlaybackState;
   enabled: boolean;
   onPlay: () => void;
+  speechAction?: { onPlay: () => void; enabled: boolean; status: string; playing: boolean };
   readOnly?: boolean;
   voiceAction?: { label: string; hint: string; pressed?: boolean; onClick: () => void };
 }) {
@@ -55,6 +57,7 @@ export function DrivingRestrictionPanel({
           playback={playback}
           enabled={enabled}
           onPlay={onPlay}
+          speechAction={speechAction}
           readOnly={readOnly}
         />
       ) : (

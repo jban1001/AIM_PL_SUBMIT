@@ -282,3 +282,26 @@ test("네이티브 취소 도중 들어오는 동기 오류도 한 번만 정리
   });
   assert.equal(cancels, 1);
 });
+
+test("SDK 전용 안내는 일반 TTS나 브라우저로 대체하지 않는다", async () => {
+  await withWindow(nativeWindow(() => assert.fail("일반 TTS 호출 금지")), async () => {
+    await assert.rejects(playMockTTS("제보", {
+      signal: new AbortController().signal, manual: true, sdkOnly: true, onStart: () => {},
+    }), /Pleos TTS SDK/);
+  });
+});
+
+test("수신 제보 SDK 전용 재생은 별도 브리지에 본문을 전달한다", async () => {
+  const host = nativeWindow(() => assert.fail("대체 TTS 호출 금지"));
+  Object.assign(host.GazeeSpeech, { speakSdk(id: string, text: string) {
+    assert.equal(text, "인천대교 정체 제보");
+    for (const phase of ["started", "done"]) host.dispatchEvent(new CustomEvent("gazee-speech", {
+      detail: { id, phase, message: "Pleos ON_DEVICE" },
+    }));
+  } });
+  await withWindow(host, async () => {
+    assert.equal(await playMockTTS("인천대교 정체 제보", {
+      signal: new AbortController().signal, manual: true, sdkOnly: true, onStart: () => {},
+    }), "Pleos ON_DEVICE");
+  });
+});

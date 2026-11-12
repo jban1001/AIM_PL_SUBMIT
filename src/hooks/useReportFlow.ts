@@ -209,11 +209,12 @@ export function useReportFlow(props: FlowProps) {
       function isCurrent() {
         return current.current?.id === snapshot.id && current.current.phase === "listening";
       }
+      let readyOnce = false;
       return listenWithAppMic({
         onDeadline: (deadline) => { if (isCurrent()) patch({ microphoneDeadline: deadline }); },
-        onReady: () => { if (isCurrent()) patch({ microphoneReady: true, microphoneStatus: undefined }); },
+        onReady: () => { readyOnce = true; if (isCurrent()) patch({ microphoneReady: true, microphoneStatus: undefined }); },
         onPreparing: (message) => {
-          if (isCurrent()) patch({ microphoneReady: false, microphoneStatus: message });
+          if (isCurrent() && !readyOnce) patch({ microphoneReady: false, microphoneStatus: message });
         },
         onPartial: (body) => { if (isCurrent()) patch({ body }); },
         onResult: (body) => {

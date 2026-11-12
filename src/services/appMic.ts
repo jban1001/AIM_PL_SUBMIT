@@ -152,8 +152,12 @@ export function listenWithAppMic(
         restart();
       },
       onIdle: () => {
-        if (partial.trim()) fail("발화의 최종 결과를 확인하지 못했어요. 받아 적은 내용은 보관했어요.");
-        else restart();
+        // Silence is a round boundary, never the end of the report session.
+        // Preserve any interim draft, but only a new final result can confirm submission.
+        committed = join(committed, partial);
+        partial = "";
+        callbacks.onPartial?.(committed);
+        restart();
       },
       onError: fail,
     }, REPORT_LISTEN_MS + 5_000);

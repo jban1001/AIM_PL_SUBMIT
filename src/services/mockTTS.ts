@@ -7,6 +7,7 @@ export class MockTTSError extends Error {
 }
 type PleosSpeechBridge = {
   speak(id: string, text: string): void;
+  speakSdk?(id: string, text: string): void;
   cancel(id: string): void;
 };
 
@@ -25,6 +26,7 @@ function pleosSpeech(
   onStart: (engine: string) => void,
   onProgress?: (message: string) => void,
   onFallback?: (reason: string) => void,
+  sdkOnly = false,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     if (signal.aborted) {
@@ -82,7 +84,8 @@ function pleosSpeech(
     signal.addEventListener("abort", abort, { once: true });
     window.addEventListener("gazee-speech", receive);
     try {
-      bridge.speak(id, text);
+      if (sdkOnly) bridge.speakSdk!(id, text);
+      else bridge.speak(id, text);
     } catch {
       finish(new MockTTSError("blocked", "Pleos 음성 서비스를 호출하지 못했어요."));
     }
@@ -165,12 +168,15 @@ export async function playMockTTS(
   options: {
     signal: AbortSignal;
     manual: boolean;
+    sdkOnly?: boolean;
     onStart: (engine: string) => void;
     onProgress?: (message: string) => void;
     onFallback?: (reason: string) => void;
   },
 ): Promise<string> {
   const bridge = typeof window !== "undefined" ? window.GazeeSpeech : undefined;
-  if (bridge) return pleosSpeech(bridge, text, options.signal, options.onStart, options.onProgress, options.onFallback);
+  if (options.sdkOnly && !bridge?.speakSdk)
+    throw new MockTTSError("unsupported", "Pleos TTS SDK가 연결된 Android 앱에서 사용할 수 있어요.");
+  if (bridge) return pleosSpeech(bridge, text, options.signal, options.onStart, options.onProgress, options.onFallback, options.sdkOnly);
   return browserSpeech(text, options.signal, options.onStart);
 }
