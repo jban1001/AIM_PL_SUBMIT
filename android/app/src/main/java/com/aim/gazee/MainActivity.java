@@ -60,7 +60,7 @@ public final class MainActivity extends Activity {
     private boolean speedPermissionRequested;
     private PleosSpeech speech;
     private NotificationChime chime;
-    private OfflineKoreanMic microphone;
+    private PleosMic microphone;
     // Defined by the Gleo package as a signature permission and granted to its service.
     private static final String GLEO_ACTION_PERMISSION = "ai.umos.gleo.permission.APP_ACTION";
     private GleoReportAction gleo;
@@ -120,7 +120,7 @@ public final class MainActivity extends Activity {
 
         speech = new PleosSpeech(this, this::dispatchSpeechEvent);
         chime = new NotificationChime(this, this::dispatchChimeEvent);
-        microphone = new OfflineKoreanMic(this, this::dispatchMicEvent);
+        microphone = new PleosMic(this, this::dispatchMicEvent);
         gleo = new GleoReportAction(this, this::dispatchGleoReport, this::dispatchGleoRead);
         IntentFilter gleoActions = new IntentFilter(GleoReportAction.ACTION);
         gleoActions.addAction(getPackageName() + "." + GleoReportAction.ACTION);

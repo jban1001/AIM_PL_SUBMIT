@@ -392,11 +392,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
       return;
     }
     setWakeStatus("");
-    const fixedScenario = body && (matchesIncheonCongestion(body, "") ? congestion : matchesInhaBlackIce(body, "") ? blackIce : undefined);
-    flow.begin("voice", selected, fixedScenario || scenario, fixedScenario ? fixedScenario.exampleInput : body, "mic", undefined, {
-      scriptedExample: !!fixedScenario,
-      simulationCategory: fixedScenario ? fixedScenario.category : undefined,
-    });
+    flow.begin("voice", selected, scenario, body, "mic");
   });
   const canListenForWake = vehicleScreen === "NORMAL" && driving && !voiceSession && !busy;
   useEffect(() => {

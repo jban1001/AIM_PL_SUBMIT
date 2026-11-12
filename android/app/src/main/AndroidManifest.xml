@@ -1,8 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-feature android:name="android.hardware.type.automotive" android:required="true" />
+
+    <uses-feature
+        android:name="android.hardware.type.automotive"
+        android:required="true" />
+
+    <!-- Pleos Connect TTS SDK -->
     <uses-permission android:name="pleos.car.permission.TTS_SERVICE" />
+
+    <!-- Pleos Connect STT SDK -->
+    <uses-permission android:name="pleos.car.permission.STT_SERVICE" />
+
+    <!-- Microphone -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- Android system TTS fallback must be able to discover installed TTS engines. -->
     <queries>
         <intent>
@@ -16,17 +27,24 @@
         android:label="GAZEE"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
-        <uses-library android:name="android.car" android:required="false" />
+
+        <uses-library
+            android:name="android.car"
+            android:required="false" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:launchMode="singleTop"
             android:resizeableActivity="true"
             android:windowSoftInputMode="adjustResize">
+
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
         </activity>
     </application>
+
 </manifest>

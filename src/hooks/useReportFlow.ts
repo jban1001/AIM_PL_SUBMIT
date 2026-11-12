@@ -37,6 +37,7 @@ export interface ReportSession {
   simulationCategory?: Category;
   microphoneReady?: boolean;
   microphoneStatus?: string;
+  microphoneDeadline?: number;
   // 받아쓰기 자동 시연: open(작성 화면) → dictating(말로 입력) → dictated(등록 대기)
   demo?: "open" | "dictating" | "dictated";
   // 자동 시연이 곧 누를 버튼을 강조합니다.
@@ -110,7 +111,7 @@ export function useReportFlow(props: FlowProps) {
       ...options,
       speechFault: mode === "voice" && voiceInput === "mock" ? latest.current.consumeSpeechFault() : "none",
     });
-    if (providedBody) void submit(providedBody);
+    if (providedBody && voiceInput !== "mic") void submit(providedBody);
     return true;
   }
   // 터치 작성 화면을 열고 말로 입력 → 받아쓰기 → 등록을 순서대로 자동 진행합니다.
@@ -181,12 +182,13 @@ export function useReportFlow(props: FlowProps) {
     const demo = current.current.demo;
     const voiceInput = demo || !window.GazeeMic ? "mock" : "mic";
     patch({
-      body: "",
+      body: voiceInput === "mic" ? current.current.body : "",
       phase: "listening",
       error: "",
       voiceInput,
       microphoneReady: false,
       microphoneStatus: undefined,
+      microphoneDeadline: undefined,
       speechFault: voiceInput === "mock" ? latest.current.consumeSpeechFault() : "none",
       demo: demo === "open" ? "dictating" : demo,
       demoPress: undefined,
@@ -208,6 +210,7 @@ export function useReportFlow(props: FlowProps) {
         return current.current?.id === snapshot.id && current.current.phase === "listening";
       }
       return listenWithAppMic({
+        onDeadline: (deadline) => { if (isCurrent()) patch({ microphoneDeadline: deadline }); },
         onReady: () => { if (isCurrent()) patch({ microphoneReady: true, microphoneStatus: undefined }); },
         onPreparing: (message) => {
           if (isCurrent()) patch({ microphoneReady: false, microphoneStatus: message });
@@ -219,7 +222,7 @@ export function useReportFlow(props: FlowProps) {
           else patch({ body, phase: "editing" });
         },
         onError: (error) => { if (isCurrent()) patch({ phase: "stt-error", error }); },
-      });
+      }, { report: true, initialBody: snapshot.body });
     }
     if (snapshot.voiceInput === "gleo") return;
     let finishTimer: ReturnType<typeof setTimeout>;

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { ReportSession } from "../hooks/useReportFlow";
 import { Icon } from "./Icon";
 import { CategoryLabel } from "./Community";
@@ -13,6 +14,18 @@ export function VoiceReport({
   onRetry: () => void;
   onCancel: () => void;
 }) {
+  const [remaining, setRemaining] = useState(60);
+  const deadline = session.microphoneDeadline;
+  useEffect(() => {
+    if (session.phase !== "listening" || !deadline) {
+      setRemaining(60);
+      return;
+    }
+    const update = () => setRemaining(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+    update();
+    const timer = setInterval(update, 250);
+    return () => clearInterval(timer);
+  }, [session.phase, deadline]);
   const failed = ["stt-error", "insufficient", "ai-error"].includes(session.phase);
   const processing = session.phase === "processing";
   const success = session.phase === "success";
@@ -28,7 +41,7 @@ export function VoiceReport({
             등록 대상 · {community}
           </span>
         </div>
-        <span className="mock-badge">{session.voiceInput === "gleo" ? "Gleo Action" : session.voiceInput === "mic" ? "실제 마이크" : "MOCK STT"}</span>
+        <span className="mock-badge">{session.voiceInput === "gleo" ? "Gleo Action" : session.voiceInput === "mic" ? "Pleos STT" : "MOCK STT"}</span>
       </div>
       <div className={`voice-orb ${session.phase === "listening" ? "listening" : ""}`}>
         <Icon name={success ? "check" : processing ? "spark" : failed ? "info" : "mic"} size={37} />
@@ -51,8 +64,14 @@ export function VoiceReport({
             : failed
               ? "유효한 제보가 확보되기 전에는 게시하지 않습니다."
               : micPreparing ? "잠시 기다려 주세요."
-                : session.allowIncompleteDemoSpeech ? "제보할 내용을 말해 주세요." : "어느 장소에서 어떤 상황인지 말해 주세요."}
+                : session.voiceInput === "mic" ? "장소와 상황을 말하고, 끝나면 ‘제보해줘’라고 말해 주세요."
+                  : session.allowIncompleteDemoSpeech ? "제보할 내용을 말해 주세요." : "어느 장소에서 어떤 상황인지 말해 주세요."}
       </p>
+      {session.phase === "listening" && session.voiceInput === "mic" && (
+        <p className="voice-subtitle" role="timer" aria-label="음성 입력 남은 시간">
+          {deadline ? `남은 시간 ${remaining}초` : "최대 60초"} · 잠깐 쉬어도 이어서 들어요
+        </p>
+      )}
       {session.phase === "listening" && !micPreparing && (
         <div className="voice-wave" aria-hidden="true">
           {Array.from({ length: 33 }, (_, i) => (
@@ -105,7 +124,7 @@ export function VoiceReport({
         {session.voiceInput === "gleo"
           ? "GLEO가 앱에 전달한 제보예요."
           : session.voiceInput === "mic"
-            ? "기기 내 음성 인식으로 제보 내용을 받아 적어요."
+            ? "‘제보해줘’로 입력을 마쳐요. 60초가 지나면 등록하지 않고 내용을 보관해요."
             : "예시 발화로 음성 인식을 시연합니다."}
       </p>
     </section>
