@@ -58,7 +58,7 @@ import { preferredPosts } from "./domain/preferences";
 import { listenWithAppMic } from "./services/appMic";
 import { playMockTTS } from "./services/mockTTS";
 import { playNotificationChime } from "./services/notificationChime";
-import { matchesDemoUtterance, normalizeGleoReport, reportInputError, voiceCommandBody, type MissingReportField } from "./services/reportInput";
+import { matchesDemoUtterance, normalizeGleoReport, voiceCommandBody, type MissingReportField } from "./services/reportInput";
 
 declare global {
   interface Window {
@@ -326,7 +326,9 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
     const title = normalizeGleoReport(report.body ?? "")
       || normalizeGleoReport(details ? `${details.location} ${details.condition}` : "")
       || normalizeGleoReport(details?.utterance ?? "");
-    const allowIncompleteDemoSpeech = relay.role === "front" && vehicleScreen === "NORMAL";
+    // Filming build: accept partial Gleo reports in every scenario and demo role.
+    // Keep empty-input validation and the existing platform interaction restrictions.
+    const allowIncompleteDemoSpeech = true;
     const demo = gleoDemo?.scenarioId === scenarioId
       ? simulationTabs.find((tab) => tab.reportScenarioId === scenarioId && tab.reportMode === "voice")
       : undefined;
@@ -336,12 +338,6 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
     const scriptedExample = !!fixedScenario || (!!demo && matchesDemoUtterance(details?.utterance || title, scenario.exampleInput));
     if (!title && !scriptedExample && allowIncompleteDemoSpeech) {
       window.GazeeGleo?.complete(requestId, false);
-      return;
-    }
-    const issue = scriptedExample || allowIncompleteDemoSpeech ? null : reportInputError(title, details);
-    if (issue) {
-      setToast(issue.message);
-      window.GazeeGleo?.requestDetails(requestId, issue.missing);
       return;
     }
     const body = scriptedExample ? reportScenario.exampleInput : title;

@@ -13,6 +13,7 @@ import {
 import { blackIce, BLACK_ICE_SUMMARY, BLACK_ICE_EVIDENCE } from "../src/scenarios/blackIce.ts";
 import { CURRENT_USER_ID, mockConfig } from "../src/domain/types.ts";
 import { congestion } from "../src/scenarios/congestion.ts";
+import { local } from "../src/scenarios/local.ts";
 import { parking } from "../src/scenarios/parking.ts";
 import { normalizeReportBody, validateReportBody } from "../src/services/reportInput.ts";
 
@@ -194,4 +195,19 @@ test("앞차 음성 시연은 장소 또는 상황만 들어와도 실제 인식
   assert.equal(situation.summary, "막히고 있어요");
   assert.equal(place.summary, "인천대교");
   assert.ok(scenarioReportInputError(congestion, "", options));
+});
+
+test("촬영용 Gleo 제보는 모든 시나리오에서 부족 정보를 재질문하지 않고 등록한다", async () => {
+  for (const scenario of [congestion, blackIce, parking, local]) {
+    for (const body of ["미끄러워요", "인하대역"]) {
+      const post = await processReport(scenario, body, "nearby", [], false, {
+        source: "voice", allowIncompleteDemoSpeech: true, aiDelayMs: 0,
+        reportDetails: { location: "", condition: "", utterance: body },
+      });
+      assert.equal(post.originalBody, body);
+    }
+    await assert.rejects(processReport(scenario, "", "nearby", [], false, {
+      source: "voice", allowIncompleteDemoSpeech: true, aiDelayMs: 0,
+    }), /내용을 입력/);
+  }
 });
