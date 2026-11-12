@@ -37,7 +37,7 @@ test("블랙아이스 이벤트는 고정 ID, 100m, 3분 전 제보와 정확한
   assert.equal(event.post.simulated, true);
   assert.equal(event.post.id, BlackIceScenario.createEvent("destination").post.id);
 });
-test("앞차 고정 제보는 수신 시연과 동일한 카드와 GLEO 낭독 대사를 사용한다", () => {
+test("앞차 제보 내용과 범주가 달라도 뒤차는 선택된 시나리오의 카드와 대사를 사용한다", () => {
   for (const [scenario, category] of [
     [TrafficScenario, "교통"],
     [BlackIceScenario, "도로 위험"],
@@ -47,10 +47,17 @@ test("앞차 고정 제보는 수신 시연과 동일한 카드와 GLEO 낭독 �
     const direct = scenario.createEvent("nearby", 1_000_000);
     assert.equal(direct.post.category, category);
     assert.match(direct.speech, /제보가 있어요\./u);
-    const report = { ...direct.post, id: "front-report" };
-    assert.equal(makeRearNotification(report, 850, 1_000_000, scenario), null);
-    assert.equal(makeRearNotification(report, direct.distanceMeters + 1, 1_000_000, scenario), null);
-    const rear = makeRearNotification(report, direct.distanceMeters, 1_000_000, scenario);
+    const report = {
+      ...direct.post,
+      id: "front-report",
+      category: "기타" as const,
+      summary: "강남역 앞 공사 제보",
+      evidence: "앞차 제보의 근거",
+      description: "앞차 제보의 상세 내용",
+    };
+    assert.equal(makeRearNotification(report, 850, scenario, 1_000_000), null);
+    assert.equal(makeRearNotification(report, direct.distanceMeters + 1, scenario, 1_000_000), null);
+    const rear = makeRearNotification(report, direct.distanceMeters, scenario, 1_000_000);
     assert.deepEqual(rear, { ...direct, post: { ...direct.post, id: report.id } });
   }
 });

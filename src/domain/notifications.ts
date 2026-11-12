@@ -33,26 +33,15 @@ export interface ScenarioEventHandler {
   createEvent: (community: CommunityId, now?: number) => MockNotificationData;
 }
 export function makeRearNotification(
-  frontPost: Post,
+  frontPost: Pick<Post, "id" | "community">,
   distanceMeters: number,
+  scenario: ScenarioEventHandler,
   now = Date.now(),
-  scenario?: ScenarioEventHandler,
 ): MockNotificationData | null {
   if (!Number.isFinite(distanceMeters) || distanceMeters < 0) return null;
-  if (scenario) {
-    const event = scenario.createEvent(frontPost.community, now);
-    if (distanceMeters > event.distanceMeters) return null;
-    return { ...event, post: { ...event.post, id: frontPost.id } };
-  }
-  if (distanceMeters > 500) return null;
-  return {
-    post: { ...frontPost, authorId: "demo-front-vehicle", simulated: true },
-    speech: `전방 약 ${distanceMeters}미터, 앞차 제보입니다. ${frontPost.summary}`,
-    distanceMeters,
-    source: "앞차 제보 수신",
-    receivedAt: now,
-    simulated: true,
-  };
+  const event = scenario.createEvent(frontPost.community, now);
+  if (distanceMeters > event.distanceMeters) return null;
+  return { ...event, post: { ...event.post, id: frontPost.id } };
 }
 
 const categoryPriority: Record<Category, number> = {

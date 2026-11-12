@@ -120,9 +120,6 @@ export async function processReport(
     authorId: CURRENT_USER_ID,
     source: options.source ?? "touch",
     originalBody,
-    ...(options.scriptedExample && originalBody === normalizeReportBody(scenario.exampleInput)
-      ? { scriptedScenarioId: scenario.id }
-      : {}),
   };
 }
 

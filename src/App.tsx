@@ -42,7 +42,6 @@ import { useNotificationDelivery } from "./hooks/useNotificationDelivery";
 import {
   makeRearNotification,
   type MockNotificationData,
-  type ScenarioEventHandler,
   upsertReceivedPost,
   type CommunitySelectionState,
   type DrivingRestrictionState,
@@ -51,6 +50,7 @@ import {
   DICTATION_REQUIRES_STOPPED,
   notificationScenarios,
   simulationTabs,
+  type SimulationTab,
 } from "./scenarios/notifications";
 import { preferredPosts } from "./domain/preferences";
 
@@ -140,12 +140,13 @@ type GleoReportPayload = { body: string; location?: string; condition?: string; 
 
 const REAR_APPROACH_DELAY_MS = 15_000;
 
+type RelayReport = { post: Post; simulation: SimulationTab };
+
 type RelayDemo = {
   role: "front" | "rear";
-  report: Post | null;
+  report: RelayReport | null;
   distance: number;
-  receiveScenario?: ScenarioEventHandler;
-  publish: (post: Post) => void;
+  publish: (report: RelayReport) => void;
   selectRole: (role: RelayDemo["role"]) => void;
 };
 
@@ -156,7 +157,7 @@ function DemoVehicleControls({ relay }: { relay: RelayDemo }) {
       <span className="vehicle-relay-badge">{front ? "앞차 · 제보 차량" : "뒤차 · 수신 차량"}</span>
       <span className="vehicle-relay-status" role="status">
         {front
-          ? relay.report ? "등록 완료 · " + relay.report.summary : "앞차 제보를 등록하면 뒤차로 전환할 수 있어요."
+          ? relay.report ? "등록 완료 · " + relay.report.post.summary : "앞차 제보를 등록하면 뒤차로 전환할 수 있어요."
           : `전방 ${relay.distance}m · ${relay.distance > 500 ? "접근 중" : "수신 완료"}`}
       </span>
       <button
@@ -210,12 +211,13 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
   onReset: () => void;
   preferredCategories: Category[];
 }) {
-  const [selected, setSelected] = useState<CommunitySelectionState>(relay.report?.community ?? "nearby");
+  const [selected, setSelected] = useState<CommunitySelectionState>(relay.report?.post.community ?? "nearby");
   const receivedRelayId = useRef<string | null>(null);
   const gleoRequest = useRef<string | null>(null);
-  const [scenarioId, setScenarioId] = useState(scenarios[0].id);
+  const [scenarioId, setScenarioId] = useState(relay.report?.simulation.reportScenarioId ?? scenarios[0].id);
   const [gleoDemo, setGleoDemo] = useState<{ scenarioId: string; community: CommunityId } | null>(null);
   const scenario = scenarios.find((item) => item.id === scenarioId)!;
+  const simulation = simulationTabs.find((tab) => tab.reportScenarioId === scenarioId)!;
   const [feeds, setFeeds] = useState<CommunityPostData>(() => initialFeeds(preferredCategories));
   const [vehicleState, setVehicleState] = useState<VehicleState>(
     window.GazeeVehicle && relay.role === "front" ? "parked" : "driving",
@@ -283,7 +285,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
         visible: [post, ...current.visible],
         scroll: 0,
       }));
-      if (relay.role === "front") relay.publish(post);
+      if (relay.role === "front") relay.publish({ post, simulation });
       if (voiceInput === "gleo" && gleoRequest.current) {
         window.GazeeGleo?.complete(gleoRequest.current, true);
         gleoRequest.current = null;
@@ -427,9 +429,9 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
     delivery.receive(event);
   }
 
-  const receiveRelay = useEffectEvent((post: Post, distance: number) => {
+  const receiveRelay = useEffectEvent(({ post, simulation }: RelayReport, distance: number) => {
     if (receivedRelayId.current === post.id) return;
-    const event = makeRearNotification(post, distance, Date.now(), relay.receiveScenario);
+    const event = makeRearNotification(post, distance, simulation.notification);
     if (!event) return;
     receivedRelayId.current = post.id;
     receivePost(event);
@@ -780,16 +782,15 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
           gleoExample={gleoDemo ? simulationTabs.find((tab) => tab.reportScenarioId === gleoDemo.scenarioId)?.gleoExample : undefined}
           onReport={() => {
             setGleoDemo(null);
-            const tab = simulationTabs.find((item) => item.reportScenarioId === scenarioId);
-            if (tab?.reportMode !== "dictation") {
-              flow.beginVoiceDemo(selected, scenario, tab?.speed);
+            if (simulation.reportMode !== "dictation") {
+              flow.beginVoiceDemo(selected, scenario, simulation.speed);
               window.scrollTo(0, 0);
               return;
             }
             if (driving) setToast(DICTATION_REQUIRES_STOPPED);
             else if (session) setToast("작성 중인 제보를 먼저 등록하거나 취소해 주세요.");
             else {
-              flow.beginDictationDemo(selected, scenario, tab.speed);
+              flow.beginDictationDemo(selected, scenario, simulation.speed);
               window.scrollTo(0, 0);
             }
           }}
@@ -955,15 +956,14 @@ export default function App() {
   const [demoVersion, setDemoVersion] = useState(0);
   const [preferredCategories, setPreferredCategories] = useState<Category[] | null>(null);
   const [role, setRole] = useState<RelayDemo["role"]>("front");
-  const [report, setReport] = useState<Post | null>(null);
+  const [report, setReport] = useState<RelayReport | null>(null);
   const [distance, setDistance] = useState(850);
-  const rearScenario = simulationTabs.find((tab) => tab.reportScenarioId === report?.scriptedScenarioId)?.notification;
   useEffect(() => {
     if (role !== "rear" || !report) return;
-    const targetDistance = rearScenario?.createEvent(report.community).distanceMeters ?? 450;
+    const targetDistance = report.simulation.notification.createEvent(report.post.community).distanceMeters;
     const timer = window.setTimeout(() => setDistance(targetDistance), REAR_APPROACH_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [role, report, rearScenario]);
+  }, [role, report]);
 
   const selectRole = useCallback((next: RelayDemo["role"]) => {
     if (!preferredCategories) return "app-not-ready";
@@ -1006,7 +1006,6 @@ export default function App() {
             role,
             report,
             distance,
-            receiveScenario: rearScenario,
             publish: setReport,
             selectRole,
           }}

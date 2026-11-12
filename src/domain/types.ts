@@ -13,7 +13,6 @@ export interface Post extends AIResult {
   authorId?: string;
   source?: InputMode;
   originalBody?: string;
-  scriptedScenarioId?: string;
 }
 export interface AIResult {
   summary: string;
