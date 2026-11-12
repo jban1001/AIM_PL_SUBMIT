@@ -180,6 +180,18 @@ test("시연에서 선택한 범주로 등록한다", async () => {
 
 test("장소가 생략된 고정 예시는 시나리오 시연으로 시작한 경우에만 허용한다", () => {
   assert.ok(scenarioReportInputError(parking, parking.exampleInput));
-  assert.equal(scenarioReportInputError(parking, parking.exampleInput, undefined, true), null);
-  assert.ok(scenarioReportInputError(congestion, "막히고 있어요", undefined, true));
+  assert.equal(scenarioReportInputError(parking, parking.exampleInput, { scriptedExample: true }), null);
+  assert.ok(scenarioReportInputError(congestion, "막히고 있어요", { scriptedExample: true }));
+});
+
+test("앞차 음성 시연은 장소 또는 상황만 들어와도 실제 인식 문구를 등록한다", async () => {
+  const options = { source: "voice" as const, allowIncompleteDemoSpeech: true, aiDelayMs: 0 };
+  const situation = await processReport(congestion, "막히고 있어요", "nearby", [], false, options);
+  const place = await processReport(congestion, "인천대교", "nearby", [], false, {
+    ...options,
+    reportDetails: { location: "인천대교", condition: "" },
+  });
+  assert.equal(situation.summary, "막히고 있어요");
+  assert.equal(place.summary, "인천대교");
+  assert.ok(scenarioReportInputError(congestion, "", options));
 });

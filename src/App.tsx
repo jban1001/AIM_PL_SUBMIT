@@ -40,6 +40,7 @@ import {
 import { useReportFlow } from "./hooks/useReportFlow";
 import { useNotificationDelivery } from "./hooks/useNotificationDelivery";
 import {
+  makeFrontDemoPost,
   makeRearNotification,
   type MockNotificationData,
   upsertReceivedPost,
@@ -54,7 +55,7 @@ import {
 } from "./scenarios/notifications";
 import { preferredPosts } from "./domain/preferences";
 
-import { listenWithPleos } from "./services/pleosMic";
+import { listenWithAppMic } from "./services/appMic";
 import { playNotificationChime } from "./services/notificationChime";
 import { matchesDemoUtterance, normalizeGleoReport, reportInputError, voiceCommandBody, type MissingReportField } from "./services/reportInput";
 
@@ -145,8 +146,10 @@ type RelayReport = { post: Post; simulation: SimulationTab };
 type RelayDemo = {
   role: "front" | "rear";
   report: RelayReport | null;
+  publishedReports: RelayReport[];
   distance: number;
   publish: (report: RelayReport) => void;
+  removePublished: (id: string) => void;
   selectRole: (role: RelayDemo["role"]) => void;
 };
 
@@ -185,11 +188,15 @@ const boardSeeds = Object.fromEntries(
     examples: [...boardExamples.slice(index), ...boardExamples.slice(0, index)],
   }]),
 ) as Record<CommunityId, (typeof scenarios)[number]>;
-function initialFeeds(preferredCategories: Category[]) {
+function initialFeeds(preferredCategories: Category[], relay: RelayDemo) {
   return Object.fromEntries(
     ids.map((id) => {
       const scenario = boardSeeds[id];
-      const all = createPosts(scenario, id);
+      const published = relay.publishedReports
+        .filter(({ post }) => post.community === id)
+        .map(({ post }) => relay.role === "front" ? post : { ...post, authorId: undefined });
+      const all = [...published, ...createPosts(scenario, id)]
+        .sort((a, b) => b.createdAt - a.createdAt);
       return [
         id,
         {
@@ -218,7 +225,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
   const [gleoDemo, setGleoDemo] = useState<{ scenarioId: string; community: CommunityId } | null>(null);
   const scenario = scenarios.find((item) => item.id === scenarioId)!;
   const simulation = simulationTabs.find((tab) => tab.reportScenarioId === scenarioId)!;
-  const [feeds, setFeeds] = useState<CommunityPostData>(() => initialFeeds(preferredCategories));
+  const [feeds, setFeeds] = useState<CommunityPostData>(() => initialFeeds(preferredCategories, relay));
   const [vehicleState, setVehicleState] = useState<VehicleState>(
     window.GazeeVehicle && relay.role === "front" ? "parked" : "driving",
   );
@@ -278,7 +285,10 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
       setSpeechFault("none");
       return fault;
     },
-    onPublished: (post, _mode, voiceInput) => {
+    onPublished: (result, { mode, voiceInput, scriptedExample }) => {
+      const post = relay.role === "front" && (mode === "voice" || voiceInput === "mic" || scriptedExample)
+        ? makeFrontDemoPost(result, simulation.notification, !vehicleUnavailable)
+        : result;
       updateFeed(post.community, (current) => ({
         ...current,
         all: [post, ...current.all],
@@ -310,7 +320,10 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
     const details = report.location !== undefined || report.condition !== undefined || report.utterance !== undefined
       ? { location: report.location ?? "", condition: report.condition ?? "", utterance: report.utterance?.trim() || undefined }
       : undefined;
-    const title = normalizeGleoReport(report.body || (details ? `${details.location} ${details.condition}` : ""));
+    const title = normalizeGleoReport(report.body ?? "")
+      || normalizeGleoReport(details ? `${details.location} ${details.condition}` : "")
+      || normalizeGleoReport(details?.utterance ?? "");
+    const allowIncompleteDemoSpeech = relay.role === "front" && vehicleScreen === "NORMAL";
     const demo = gleoDemo?.scenarioId === scenarioId
       ? simulationTabs.find((tab) => tab.reportScenarioId === scenarioId && tab.reportMode === "voice")
       : undefined;
@@ -318,7 +331,11 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
       : matchesInhaBlackIce(details?.utterance, title) ? blackIce : undefined;
     const reportScenario = fixedScenario ?? scenario;
     const scriptedExample = !!fixedScenario || (!!demo && matchesDemoUtterance(details?.utterance || title, scenario.exampleInput));
-    const issue = scriptedExample ? null : reportInputError(title, details);
+    if (!title && !scriptedExample && allowIncompleteDemoSpeech) {
+      window.GazeeGleo?.complete(requestId, false);
+      return;
+    }
+    const issue = scriptedExample || allowIncompleteDemoSpeech ? null : reportInputError(title, details);
     if (issue) {
       setToast(issue.message);
       window.GazeeGleo?.requestDetails(requestId, issue.missing);
@@ -327,6 +344,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
     const body = scriptedExample ? reportScenario.exampleInput : title;
     if (!flow.begin("voice", demo ? gleoDemo!.community : selected, reportScenario, body, "gleo", details, {
       scriptedExample,
+      allowIncompleteDemoSpeech,
       simulationCategory: scriptedExample || demo ? reportScenario.category : undefined,
     })) {
       window.GazeeGleo?.complete(requestId, false);
@@ -387,7 +405,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
       setWakeListening(false);
       return;
     }
-    return listenWithPleos({
+    return listenWithAppMic({
       onReady: () => setWakeStatus("듣는 중 · “제보할게”라고 말해 주세요."),
       onPreparing: setWakeStatus,
       onResult: acceptWake,
@@ -434,7 +452,9 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
     const event = makeRearNotification(post, distance, simulation.notification);
     if (!event) return;
     receivedRelayId.current = post.id;
-    receivePost(event);
+    // The board already contains the published post. Keep its publication time
+    // while showing the receiver's scripted card and playing its chime.
+    delivery.receive(event);
   });
   useEffect(() => {
     if (relay.role === "rear" && relay.report && !offline) receiveRelay(relay.report, relay.distance);
@@ -496,14 +516,16 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
     if (offline || blocked) return;
     updateFeed(selected, (current) => ({
       ...current,
-      all: [...current.pending, ...current.all],
-      visible: [...preferredPosts(current.pending, preferredCategories), ...current.visible],
+      all: [...current.pending, ...current.all].sort((a, b) => b.createdAt - a.createdAt),
+      visible: [...preferredPosts(current.pending, preferredCategories), ...current.visible]
+        .sort((a, b) => b.createdAt - a.createdAt),
       pending: [],
       scroll: 0,
     }));
     setToast("새로운 소식을 목록에 반영했어요.");
   }
   function removePost(id: string) {
+    if (relay.role === "front") relay.removePublished(id);
     updateFeed(selected, (current) => ({
       ...current,
       all: deleteOwnPost(current.all, id),
@@ -630,7 +652,9 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
                           <span className="setting-note">Mock</span>
                         </span>
                       </div>
-                      <ReportEntry onClick={() => flow.begin("touch", selected, scenario)} />
+                      <ReportEntry onClick={() => flow.begin("touch", selected, scenario, undefined, "mock", undefined, {
+                        allowIncompleteDemoSpeech: relay.role === "front" && vehicleScreen === "NORMAL",
+                      })} />
                     </div>
                     {offline && (
                       <div className="offline-banner" role="status">
@@ -691,11 +715,27 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
                     publishedPost={publishedPost}
                     playback={delivery.stateFor(notification?.post.id ?? "")}
                     enabled
-                    voiceWake={window.GazeeMic ? {
-                      active: wakeListening,
-                      status: wakeStatus,
-                      onToggle: () => setWakeListening((value) => !value),
-                    } : undefined}
+                    voiceAction={window.GazeeMic ? (
+                      relay.role === "front"
+                        ? {
+                            label: "음성으로 제보",
+                            hint: "마이크 버튼을 누르고 제보할 내용을 말해 주세요.",
+                            onClick: () => {
+                              setGleoDemo(null);
+                              if (flow.begin("voice", selected, scenario, undefined, "mic", undefined, {
+                                allowIncompleteDemoSpeech: true,
+                              })) {
+                                window.scrollTo(0, 0);
+                              }
+                            },
+                          }
+                        : {
+                            label: wakeListening ? "음성 호출 끄기" : "음성 호출 켜기",
+                            hint: wakeStatus || "마이크를 켜고 “제보할게”라고 말해 주세요.",
+                            pressed: wakeListening,
+                            onClick: () => setWakeListening((value) => !value),
+                          }
+                    ) : undefined}
                     onPlay={() => {
                       if (notification) delivery.retryChime(notification);
                     }}
@@ -956,7 +996,8 @@ export default function App() {
   const [demoVersion, setDemoVersion] = useState(0);
   const [preferredCategories, setPreferredCategories] = useState<Category[] | null>(null);
   const [role, setRole] = useState<RelayDemo["role"]>("front");
-  const [report, setReport] = useState<RelayReport | null>(null);
+  const [publishedReports, setPublishedReports] = useState<RelayReport[]>([]);
+  const report = publishedReports[0] ?? null;
   const [distance, setDistance] = useState(850);
   useEffect(() => {
     if (role !== "rear" || !report) return;
@@ -983,7 +1024,7 @@ export default function App() {
 
   function reset() {
     setRole("front");
-    setReport(null);
+    setPublishedReports([]);
     setDistance(850);
     setDemoVersion((value) => value + 1);
   }
@@ -1005,8 +1046,11 @@ export default function App() {
           relay={{
             role,
             report,
+            publishedReports,
             distance,
-            publish: setReport,
+            publish: (newReport) => setPublishedReports((previous) => [newReport, ...previous]),
+            removePublished: (id) => setPublishedReports((previous) =>
+              previous.filter(({ post }) => post.id !== id)),
             selectRole,
           }}
         />

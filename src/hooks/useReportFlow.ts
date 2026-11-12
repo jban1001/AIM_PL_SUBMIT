@@ -11,7 +11,7 @@ import {
 import { processReport, scenarioReportInputError, type ReportOptions } from "../services/mockCommunity";
 import { normalizeReportBody, type GleoReportDetails } from "../services/reportInput";
 
-import { listenWithPleos } from "../services/pleosMic";
+import { listenWithAppMic } from "../services/appMic";
 
 export type ReportPhase =
   | "editing"
@@ -33,8 +33,10 @@ export interface ReportSession {
   voiceInput: "mock" | "mic" | "gleo";
   reportDetails?: GleoReportDetails;
   scriptedExample?: boolean;
+  allowIncompleteDemoSpeech?: boolean;
   simulationCategory?: Category;
   microphoneReady?: boolean;
+  microphoneStatus?: string;
   // 받아쓰기 자동 시연: open(작성 화면) → dictating(말로 입력) → dictated(등록 대기)
   demo?: "open" | "dictating" | "dictated";
   // 자동 시연이 곧 누를 버튼을 강조합니다.
@@ -49,7 +51,7 @@ interface FlowProps {
   getPosts: (community: CommunityId) => Post[];
   getOptions: () => ReportOptions & { fail: boolean; offline: boolean };
   consumeSpeechFault: () => SpeechFault;
-  onPublished: (post: Post, mode: InputMode, voiceInput: ReportSession["voiceInput"]) => void;
+  onPublished: (post: Post, session: Pick<ReportSession, "mode" | "voiceInput" | "scriptedExample">) => void;
 }
 export function useReportFlow(props: FlowProps) {
   const latest = useRef(props);
@@ -84,7 +86,7 @@ export function useReportFlow(props: FlowProps) {
     providedBody?: string,
     voiceInput: ReportSession["voiceInput"] = providedBody === undefined ? "mock" : "mic",
     reportDetails?: GleoReportDetails,
-    options: Pick<ReportSession, "demo" | "speed" | "scriptedExample" | "simulationCategory"> = {},
+    options: Pick<ReportSession, "demo" | "speed" | "scriptedExample" | "allowIncompleteDemoSpeech" | "simulationCategory"> = {},
   ) {
     if (
       busy.current ||
@@ -128,7 +130,12 @@ export function useReportFlow(props: FlowProps) {
     const snapshot = current.current;
     if (!snapshot || busy.current) return;
     const body = normalizeReportBody(text ?? snapshot.body);
-    const issue = scenarioReportInputError(snapshot.scenario, body, snapshot.reportDetails, snapshot.scriptedExample);
+    const validation = {
+      reportDetails: snapshot.reportDetails,
+      scriptedExample: snapshot.scriptedExample,
+      allowIncompleteDemoSpeech: snapshot.allowIncompleteDemoSpeech && snapshot.voiceInput !== "mock",
+    };
+    const issue = scenarioReportInputError(snapshot.scenario, body, validation);
     if (issue) {
       patch({ body, phase: "insufficient", error: issue.message });
       return;
@@ -154,14 +161,13 @@ export function useReportFlow(props: FlowProps) {
         {
           ...options,
           source: snapshot.mode,
-          reportDetails: snapshot.reportDetails,
-          scriptedExample: snapshot.scriptedExample,
+          ...validation,
           simulationCategory: snapshot.simulationCategory,
           aiDelayMs: scaled(snapshot, mockConfig.aiDelayMs),
         },
       );
       if (!alive.current || current.current?.id !== snapshot.id) return;
-      latest.current.onPublished(post, snapshot.mode, snapshot.voiceInput);
+      latest.current.onPublished(post, snapshot);
       patch({ phase: "success", error: "" });
     } catch (err) {
       if (alive.current && current.current?.id === snapshot.id)
@@ -180,6 +186,7 @@ export function useReportFlow(props: FlowProps) {
       error: "",
       voiceInput,
       microphoneReady: false,
+      microphoneStatus: undefined,
       speechFault: voiceInput === "mock" ? latest.current.consumeSpeechFault() : "none",
       demo: demo === "open" ? "dictating" : demo,
       demoPress: undefined,
@@ -200,8 +207,11 @@ export function useReportFlow(props: FlowProps) {
       function isCurrent() {
         return current.current?.id === snapshot.id && current.current.phase === "listening";
       }
-      return listenWithPleos({
-        onReady: () => { if (isCurrent()) patch({ microphoneReady: true }); },
+      return listenWithAppMic({
+        onReady: () => { if (isCurrent()) patch({ microphoneReady: true, microphoneStatus: undefined }); },
+        onPreparing: (message) => {
+          if (isCurrent()) patch({ microphoneReady: false, microphoneStatus: message });
+        },
         onPartial: (body) => { if (isCurrent()) patch({ body }); },
         onResult: (body) => {
           if (!isCurrent()) return;
@@ -236,7 +246,7 @@ export function useReportFlow(props: FlowProps) {
           finishTimer = setTimeout(() => {
             if (current.current?.id !== snapshot.id || current.current.phase !== "listening")
               return;
-            const issue = scenarioReportInputError(snapshot.scenario, text, undefined, snapshot.scriptedExample);
+            const issue = scenarioReportInputError(snapshot.scenario, text, snapshot);
             if (issue)
               patch({ phase: "insufficient", error: issue.message });
             else if (snapshot.mode === "voice") void submit(text);

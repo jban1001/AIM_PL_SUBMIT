@@ -19,10 +19,10 @@ type MicCallbacks = {
 
 let nextMicId = 0;
 
-export function listenWithPleos(callbacks: MicCallbacks) {
+export function listenWithAppMic(callbacks: MicCallbacks) {
   const bridge = window.GazeeMic;
   if (!bridge) {
-    callbacks.onError("이 환경에는 Pleos 마이크가 연결되어 있지 않아요.");
+    callbacks.onError("이 환경에서는 앱 마이크를 사용할 수 없어요.");
     return;
   }
   const id = String(++nextMicId);
@@ -59,7 +59,7 @@ export function listenWithPleos(callbacks: MicCallbacks) {
     bridge.listen(id);
   } catch {
     stop();
-    callbacks.onError("Pleos 마이크를 호출하지 못했어요.");
+    callbacks.onError("앱 마이크를 열지 못했어요.");
   }
   return stop;
 }

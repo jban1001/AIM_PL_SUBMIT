@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   compareNotificationPriority,
   emptyNotificationHistory,
+  makeFrontDemoPost,
   makeRearNotification,
   recordNotification,
   upsertReceivedPost,
@@ -55,9 +56,19 @@ test("앞차 제보 내용과 범주가 달라도 뒤차는 선택된 시나리�
       evidence: "앞차 제보의 근거",
       description: "앞차 제보의 상세 내용",
     };
-    assert.equal(makeRearNotification(report, 850, scenario, 1_000_000), null);
+    const spoken = { ...report, originalBody: "강남역 앞 공사 제보", authorId: "demo-driver", createdAt: 1_000_000 };
+    const front = makeFrontDemoPost(spoken, scenario);
+    assert.deepEqual(front, {
+      ...spoken,
+      category,
+      summary: direct.post.summary,
+      description: direct.post.description,
+      evidence: direct.post.evidence,
+    });
+    assert.equal(makeFrontDemoPost(spoken, scenario, false).evidence, "");
+    assert.equal(makeRearNotification(front, 850, scenario, 1_000_000), null);
     assert.equal(makeRearNotification(report, direct.distanceMeters + 1, scenario, 1_000_000), null);
-    const rear = makeRearNotification(report, direct.distanceMeters, scenario, 1_000_000);
+    const rear = makeRearNotification(front, direct.distanceMeters, scenario, 1_000_000);
     assert.deepEqual(rear, { ...direct, post: { ...direct.post, id: report.id } });
   }
 });

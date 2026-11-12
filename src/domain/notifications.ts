@@ -32,6 +32,15 @@ export interface ScenarioEventHandler {
   name: string;
   createEvent: (community: CommunityId, now?: number) => MockNotificationData;
 }
+export function makeFrontDemoPost(
+  post: Post,
+  scenario: ScenarioEventHandler,
+  includeEvidence = true,
+): Post {
+  const { category, summary, description, evidence } = scenario.createEvent(post.community, post.createdAt).post;
+  return { ...post, category, summary, description, evidence: includeEvidence ? evidence : "" };
+}
+
 export function makeRearNotification(
   frontPost: Pick<Post, "id" | "community">,
   distanceMeters: number,

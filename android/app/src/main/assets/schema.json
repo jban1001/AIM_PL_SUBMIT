@@ -9,7 +9,7 @@
       "function": {
         "name": "GAZEE_CREATE_REPORT",
         "component": "service",
-        "description": "Hands a road report to the app for validation and registration. Use the place as stated, including a broad road or landmark. Call the action with the available details before asking for clarification; the app handles any missing details.",
+        "description": "Hands a road report to the app for registration. Call this action using the details the driver gave, even when the place or situation is missing. Do not ask the driver to supply missing details before calling it.",
         "parameters": {
           "type": "object",
           "properties": {

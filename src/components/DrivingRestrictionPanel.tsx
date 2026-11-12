@@ -11,7 +11,7 @@ export function DrivingRestrictionPanel({
   playback,
   enabled,
   onPlay,
-  voiceWake,
+  voiceAction,
   readOnly = false,
 }: {
   communityName: string;
@@ -21,7 +21,7 @@ export function DrivingRestrictionPanel({
   enabled: boolean;
   onPlay: () => void;
   readOnly?: boolean;
-  voiceWake?: { active: boolean; status: string; onToggle: () => void };
+  voiceAction?: { label: string; hint: string; pressed?: boolean; onClick: () => void };
 }) {
   return (
     <section
@@ -89,20 +89,20 @@ export function DrivingRestrictionPanel({
         </div>
       ) : <>
       <div className="driving-panel-bottom">
-        {voiceWake ? (
+        {voiceAction ? (
           <div>
             <button
               type="button"
               className="voice-command-reminder voice-wake-button"
-              aria-pressed={voiceWake.active}
-              onClick={voiceWake.onToggle}
+              aria-pressed={voiceAction.pressed}
+              onClick={voiceAction.onClick}
             >
               <Icon name="mic" size={16} />
               <span className="voice-command-label">음성으로 제보하기</span>
-              <strong>{voiceWake.active ? "음성 호출 끄기" : "음성 호출 켜기"}</strong>
+              <strong>{voiceAction.label}</strong>
             </button>
             <p className="voice-wake-status" role="status">
-              {voiceWake.status || "마이크를 켜고 “제보할게”라고 말해 주세요."}
+              {voiceAction.hint}
             </p>
           </div>
         ) : (

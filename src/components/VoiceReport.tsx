@@ -41,16 +41,17 @@ export function VoiceReport({
             ? (session.voiceInput === "gleo" ? "제보를 등록하는 중이에요" : "제보를 정리하는 중이에요")
             : failed
               ? session.error
-              : micPreparing ? "마이크를 준비하고 있어요" : "듣고 있어요"}
+              : micPreparing ? (session.microphoneStatus || "마이크를 준비하고 있어요") : "듣고 있어요"}
       </h2>
       <p className="voice-subtitle">
         {success
           ? "등록 대상 커뮤니티에만 추가했어요."
           : processing
-            ? "장소와 상황이 확인된 제보를 등록하고 있어요."
+            ? "제보 내용을 등록하고 있어요."
             : failed
               ? "유효한 제보가 확보되기 전에는 게시하지 않습니다."
-              : "어느 장소에서 어떤 상황인지 말해 주세요."}
+              : micPreparing ? "잠시 기다려 주세요."
+                : session.allowIncompleteDemoSpeech ? "제보할 내용을 말해 주세요." : "어느 장소에서 어떤 상황인지 말해 주세요."}
       </p>
       {session.phase === "listening" && !micPreparing && (
         <div className="voice-wave" aria-hidden="true">

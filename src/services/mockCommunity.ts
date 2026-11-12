@@ -66,6 +66,7 @@ export interface ReportAIInput {
 export interface ReportOptions {
   reportDetails?: GleoReportDetails;
   scriptedExample?: boolean;
+  allowIncompleteDemoSpeech?: boolean;
   simulationCategory?: Category;
   vehicleDataAvailable?: boolean;
   similarPostsAvailable?: boolean;
@@ -76,11 +77,12 @@ export interface ReportOptions {
 export function scenarioReportInputError(
   scenario: Scenario,
   body: string,
-  details?: GleoReportDetails,
-  scriptedExample = false,
+  options: Pick<ReportOptions, "reportDetails" | "scriptedExample" | "allowIncompleteDemoSpeech"> = {},
 ) {
-  if (scriptedExample && normalizeReportBody(body) === normalizeReportBody(scenario.exampleInput)) return null;
-  return reportInputError(body, details);
+  const normalized = normalizeReportBody(body);
+  if (options.allowIncompleteDemoSpeech && normalized) return null;
+  if (options.scriptedExample && normalized === normalizeReportBody(scenario.exampleInput)) return null;
+  return reportInputError(body, options.reportDetails);
 }
 
 export async function processReport(
@@ -93,7 +95,7 @@ export async function processReport(
 ): Promise<Post> {
   if (!body.trim()) throw new Error("내용을 입력해 주세요.");
   const originalBody = normalizeReportBody(body);
-  const issue = scenarioReportInputError(scenario, originalBody, options.reportDetails, options.scriptedExample);
+  const issue = scenarioReportInputError(scenario, originalBody, options);
   if (issue) throw new Error(issue.message);
   // Snapshot inputs at report time, before the simulated single Gemini call.
   const input: ReportAIInput = {
