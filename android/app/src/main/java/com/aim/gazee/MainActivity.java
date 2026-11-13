@@ -41,8 +41,6 @@ public final class MainActivity extends Activity {
     private static final String LOG_TAG = "GazeePleos";
     private static final int MICROPHONE_PERMISSION = 41;
     private static final int SPEED_PERMISSION = 42;
-    // During recording, the in-app demo controls own the simulated driving mode.
-    private static final boolean FOLLOW_EMULATOR_MOTION = false;
     private static final String DEMO_ROLE_ACTION = "com.aim.gazee.DEMO_ROLE";
 
     private enum Screen { NORMAL, LIMITED, DRIVING, LOCKED, UNAVAILABLE }
@@ -57,6 +55,7 @@ public final class MainActivity extends Activity {
     private Screen screen;
     private int renderGeneration;
     private boolean vehiclePageReady;
+    private String lastDemoMotion;
     private boolean speedPermissionRequested;
     private PleosSpeech speech;
     private NotificationChime chime;
@@ -135,7 +134,7 @@ public final class MainActivity extends Activity {
         emulatorDemo = (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0
                 && Build.DEVICE.startsWith("crp_avd_");
         if (emulatorDemo) {
-            if (FOLLOW_EMULATOR_MOTION) motion = new VehicleMotion(this::applyRestrictions);
+            motion = new VehicleMotion(this::publishDemoMotion);
             IntentFilter demoRole = new IntentFilter(DEMO_ROLE_ACTION);
             // The ADB shell can select a demo role without enabling driver input.
             if (Build.VERSION.SDK_INT >= 33) {
@@ -257,17 +256,13 @@ public final class MainActivity extends Activity {
         if (isDestroyed() || webView == null) return;
         boolean platformAllowsInteraction = currentRestrictions != null
                 && !currentRestrictions.isRequiresDistractionOptimization()
-                && currentRestrictions.getActiveRestrictions() == 0
-                && (motion == null || !motion.isInNonParkGear());
+                && currentRestrictions.getActiveRestrictions() == 0;
         Screen next = Screen.UNAVAILABLE;
         if (currentRestrictions != null) {
             int contentLimits = CarUxRestrictions.UX_RESTRICTIONS_LIMIT_CONTENT
                     | CarUxRestrictions.UX_RESTRICTIONS_LIMIT_STRING_LENGTH;
-            if (emulatorDemo && !FOLLOW_EMULATOR_MOTION) {
+            if (emulatorDemo && (currentRestrictions.getActiveRestrictions() & contentLimits) == 0) {
                 next = Screen.NORMAL;
-            } else if (motion != null && motion.hasDriveSpeed()
-                    && (currentRestrictions.getActiveRestrictions() & contentLimits) == 0) {
-                next = motion.isDrivingAtThreshold() ? Screen.DRIVING : Screen.LIMITED;
             } else {
                 next = platformAllowsInteraction ? Screen.NORMAL : Screen.LOCKED;
             }
@@ -285,7 +280,17 @@ public final class MainActivity extends Activity {
             renderScreen();
         }
         gleo.dispatch(canInteract && foreground);
+        publishDemoMotion();
         maybeRequestSpeedPermission();
+    }
+
+    private void publishDemoMotion() {
+        if (!vehiclePageReady || !canInteract || motion == null) return;
+        String state = motion.demoState();
+        if (state == null || state.equals(lastDemoMotion)) return;
+        lastDemoMotion = state;
+        Log.i(LOG_TAG, "Virtual Console mode: " + state);
+        webView.evaluateJavascript("window.applyGazeeDemoMotion?.(" + JSONObject.quote(state) + ")", null);
     }
 
     private void renderScreen() {
@@ -346,7 +351,9 @@ public final class MainActivity extends Activity {
             runOnUiThread(() -> {
                 if (webView == null) return;
                 vehiclePageReady = true;
+                lastDemoMotion = null;
                 renderScreen();
+                publishDemoMotion();
                 maybeRequestSpeedPermission();
             });
         }

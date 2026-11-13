@@ -64,6 +64,7 @@ declare global {
   interface Window {
     GazeeVehicle?: { ready(): void };
     applyGazeeVehicleScreen?: (mode: VehicleScreen) => true;
+    applyGazeeDemoMotion?: (state: VehicleState) => void;
     selectGazeeDemoRole?: (role: RelayDemo["role"]) => "ok" | "app-not-ready" | "report-required";
     GazeeGleo?: {
       ready(): void;
@@ -213,8 +214,10 @@ function initialFeeds(preferredCategories: Category[], relay: RelayDemo) {
     }),
   ) as Record<CommunityId, Feed>;
 }
-function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen }: {
+function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen, vehicleState, setVehicleState }: {
   vehicleScreen: VehicleScreen;
+  vehicleState: VehicleState;
+  setVehicleState: (state: VehicleState) => void;
   relay: RelayDemo;
   onReset: () => void;
   preferredCategories: Category[];
@@ -227,9 +230,6 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
   const scenario = scenarios.find((item) => item.id === scenarioId)!;
   const simulation = simulationTabs.find((tab) => tab.reportScenarioId === scenarioId)!;
   const [feeds, setFeeds] = useState<CommunityPostData>(() => initialFeeds(preferredCategories, relay));
-  const [vehicleState, setVehicleState] = useState<VehicleState>(
-    window.GazeeVehicle && relay.role === "front" ? "parked" : "driving",
-  );
   const readOnly = vehicleScreen === "LIMITED";
   const driving = !readOnly && vehicleState === "driving";
   const drivingRestrictionState: DrivingRestrictionState = driving
@@ -1015,6 +1015,9 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen 
 
 export default function App() {
   const [vehicleScreen, setVehicleScreen] = useState<VehicleScreen>("NORMAL");
+  const initialVehicleState = window.GazeeVehicle ? "parked" : "driving";
+  const [vehicleState, setVehicleState] = useState<VehicleState>(initialVehicleState);
+  const demoMotion = useRef<VehicleState | null>(null);
   useLayoutEffect(() => {
     const bridge = window.GazeeVehicle;
     if (!bridge) return;
@@ -1022,8 +1025,15 @@ export default function App() {
       flushSync(() => setVehicleScreen(mode));
       return true;
     };
+    window.applyGazeeDemoMotion = (state) => {
+      demoMotion.current = state;
+      setVehicleState(state);
+    };
     bridge.ready();
-    return () => { delete window.applyGazeeVehicleScreen; };
+    return () => {
+      delete window.applyGazeeVehicleScreen;
+      delete window.applyGazeeDemoMotion;
+    };
   }, []);
   const [demoVersion, setDemoVersion] = useState(0);
   const [preferredCategories, setPreferredCategories] = useState<Category[] | null>(null);
@@ -1057,6 +1067,7 @@ export default function App() {
   function reset() {
     setRole("front");
     setPublishedReports([]);
+    setVehicleState(demoMotion.current ?? initialVehicleState);
     setDistance(850);
     setDemoVersion((value) => value + 1);
   }
@@ -1073,6 +1084,8 @@ export default function App() {
         <RoadtownPrototype
           preferredCategories={preferredCategories ?? ["교통", "도로 위험", "주차", "지역 정보"]}
           vehicleScreen={vehicleScreen}
+          vehicleState={vehicleState}
+          setVehicleState={setVehicleState}
           key={`${demoVersion}-${role}`}
           onReset={reset}
           relay={{
