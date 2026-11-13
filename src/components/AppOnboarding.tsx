@@ -20,7 +20,10 @@ export function AppOnboarding({ onComplete }: { onComplete: (categories: Categor
 
   if (step === "launch") return (
     <main className="launch-screen" aria-label="GAZEE 시작 화면">
-      <h1 className="launch-logo">GAZEE</h1>
+      <div className="launch-brand">
+        <h1 className="launch-logo">GAZEE</h1>
+        <p className="launch-tagline">어디가지? 여기가지!</p>
+      </div>
       <button type="button" className="launch-button" onClick={() => setStep("preferences")}>
         앱 실행하기 <Icon name="arrow" size={20} />
       </button>
@@ -42,7 +45,7 @@ export function AppOnboarding({ onComplete }: { onComplete: (categories: Categor
         <div className="preferences-heading">
           <span className="preferences-kicker">어디가지? 여기가지!</span>
           <h1 ref={heading} tabIndex={-1}>어떤 소식에 관심 있으세요?</h1>
-          <p id="preferences-help">관심 있는 범주를 모두 선택해 주세요. 여러 개를 선택할 수 있어요.</p>
+          <p id="preferences-help">관심 있는 범주를 모두 선택해 주세요.</p>
         </div>
         <fieldset className="preference-options" aria-describedby="preferences-help">
           <legend className="sr-only">선호하는 범주 선택</legend>

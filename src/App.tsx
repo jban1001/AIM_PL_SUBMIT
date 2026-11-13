@@ -54,6 +54,8 @@ import {
   type SimulationTab,
 } from "./scenarios/notifications";
 import { preferredPosts } from "./domain/preferences";
+import { boardSeeds } from "./services/boardSeeds";
+import { notificationForPost } from "./domain/postDetails";
 
 import { listenWithAppMic, REPORT_END_PHRASE } from "./services/appMic";
 import { playMockTTS } from "./services/mockTTS";
@@ -183,15 +185,6 @@ type Feed = { all: Post[]; visible: Post[]; pending: Post[]; scroll: number };
 type CommunityPostData = Record<CommunityId, Feed>;
 const ids: CommunityId[] = ["nearby", "direction", "destination"];
 const communityName = (id: CommunityId) => communities.find((item) => item.id === id)!.name;
-// Board content is independent of the selected report simulation.
-const boardExamples = scenarios.flatMap((scenario) => scenario.examples);
-const boardSeeds = Object.fromEntries(
-  ids.map((id, index) => [id, {
-    ...scenarios[0],
-    id: `board-${id}`,
-    examples: [...boardExamples.slice(index), ...boardExamples.slice(0, index)],
-  }]),
-) as Record<CommunityId, (typeof scenarios)[number]>;
 function initialFeeds(preferredCategories: Category[], relay: RelayDemo) {
   return Object.fromEntries(
     ids.map((id) => {
@@ -216,9 +209,10 @@ function initialFeeds(preferredCategories: Category[], relay: RelayDemo) {
     }),
   ) as Record<CommunityId, Feed>;
 }
-function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen, vehicleState, setVehicleState }: {
+function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen, vehicleState, observedMotion, setVehicleState }: {
   vehicleScreen: VehicleScreen;
   vehicleState: VehicleState;
+  observedMotion: VehicleState | null;
   setVehicleState: (state: VehicleState) => void;
   relay: RelayDemo;
   onReset: () => void;
@@ -413,8 +407,11 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
   }, [wakeListening, canListenForWake]);
 
   const notification = delivery.history[selected][0];
-  const openedNotification = !driving && openedReport?.community === selected
-    ? delivery.history[selected].find((item) => item.post.id === openedReport.id)
+  const openedPost = !driving && openedReport?.community === selected
+    ? feed.all.find((post) => post.id === openedReport.id)
+    : undefined;
+  const openedNotification = openedPost
+    ? notificationForPost(openedPost, delivery.history[selected].find((item) => item.post.id === openedPost.id))
     : undefined;
   const displayedNotification = openedNotification ?? notification;
   useEffect(() => { setOpenedReport(null); }, [selected, driving, scenarioId]);
@@ -628,6 +625,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
       <VehicleFrame>
         <CommunityLayout
           vehicleState={vehicleState}
+          observedMotion={observedMotion}
           readOnly={readOnly}
           time={clock.toLocaleTimeString("ko-KR", {
             hour: "2-digit",
@@ -638,9 +636,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
           <main className="main-content" data-vehicle-screen={vehicleScreen} data-restriction-state={drivingRestrictionState}>
             <div className="page-heading">
               <div>
-                <span className="eyebrow">
-                  {driving ? "주행 모드" : "커뮤니티"}
-                </span>
+                {driving && <span className="eyebrow">주행 모드</span>}
                 <h1>{driving ? "운전에 집중하세요" : "지금, 내 주변 소식"}</h1>
                 <p className="state-subtitle">
                   {readOnly
@@ -717,7 +713,6 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
                       loadingMore={loadingMore}
                       onRetry={() => setOffline(false)}
                       onDelete={removePost}
-                      canOpen={(post) => delivery.history[selected].some((item) => item.post.id === post.id)}
                       onOpen={(post) => {
                         if (blocked || readOnly) return;
                         setOpenedReport({ community: selected, id: post.id });
@@ -1037,6 +1032,7 @@ export default function App() {
   const initialVehicleState = window.GazeeVehicle ? "parked" : "driving";
   const [vehicleState, setVehicleState] = useState<VehicleState>(initialVehicleState);
   const demoMotion = useRef<VehicleState | null>(null);
+  const [observedMotion, setObservedMotion] = useState<VehicleState | null>(null);
   useLayoutEffect(() => {
     const bridge = window.GazeeVehicle;
     if (!bridge) return;
@@ -1046,6 +1042,7 @@ export default function App() {
     };
     window.applyGazeeDemoMotion = (state) => {
       demoMotion.current = state;
+      setObservedMotion(state);
       setVehicleState(state);
     };
     bridge.ready();
@@ -1104,6 +1101,7 @@ export default function App() {
           preferredCategories={preferredCategories ?? ["교통", "도로 위험", "주차", "지역 정보"]}
           vehicleScreen={vehicleScreen}
           vehicleState={vehicleState}
+          observedMotion={observedMotion}
           setVehicleState={setVehicleState}
           key={`${demoVersion}-${role}`}
           onReset={reset}

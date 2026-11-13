@@ -8,17 +8,20 @@ import {
   type VehicleState,
 } from "../domain/types";
 import { Icon } from "./Icon";
+import { vehicleStatusLabel } from "../domain/postDetails";
 
 export function AppLayout({
   children,
   vehicleState,
   time,
   readOnly = false,
+  observedMotion,
 }: {
   children: ReactNode;
   vehicleState: VehicleState;
   time: string;
   readOnly?: boolean;
+  observedMotion?: VehicleState | null;
 }) {
   return (
     <div className="app-shell">
@@ -31,11 +34,7 @@ export function AppLayout({
           <div className="vehicle-status">
             <span className={`status-dot ${vehicleState === "driving" ? "amber" : ""}`} />
             <Icon name="car" size={19} />
-            {readOnly ? "읽기 전용" : vehicleState === "driving"
-              ? "주행 제한 중"
-              : vehicleState === "parked"
-                ? "주차 중"
-                : "정차 중"}
+            {vehicleStatusLabel(vehicleState, readOnly, observedMotion)}
           </div>
           <span className="topbar-line" />
           <time>{time}</time>
@@ -241,7 +240,7 @@ export function PostList({
         <>
           {posts.map((post) => (
             <PostCard post={post} key={post.id} onDelete={onDelete}
-              onOpen={!readOnly && onOpen && canOpen?.(post) ? onOpen : undefined} />
+              onOpen={!readOnly && onOpen && (!canOpen || canOpen(post)) ? onOpen : undefined} />
           ))}
           <button
             className="load-more"

@@ -107,6 +107,9 @@
 .vehicle-frame .new-posts { color: #6740b5; background: #f3effb; border: 0; border-radius: 6px; font-size: 14px; padding: 14px 18px; }
 .vehicle-frame .post-card { border-radius: 0; border: 0; border-bottom: 1px solid #e7eaf0; padding: 23px 24px; box-shadow: none; }
 .vehicle-frame .post-card:hover { background: #fafbfc; box-shadow: none; transform: none; }
+.vehicle-frame .notification-message .notification-post:hover,
+.vehicle-frame .notification-message .notification-post:active { background: transparent; }
+.vehicle-frame .post-card { -webkit-tap-highlight-color: transparent; }
 .vehicle-frame .post-card h3 { color: #252a33; font-size: 20px; line-height: 1.6; font-weight: 600; }
 .vehicle-frame .post-meta { margin-bottom: 12px; }
 .vehicle-frame .post-time { font-size: 13px; color: #7c8490; }
@@ -188,5 +191,5 @@
 }
 
 .post-detail-link { display: block; width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer; border-radius: 4px; }
-.post-detail-link:hover { color: #7045cb; }
+.post-detail-link:hover, .post-detail-link:active { color: inherit; background: transparent; }
 .post-detail-link:focus-visible { outline: 2px solid #7045cb; outline-offset: 5px; }

@@ -29,7 +29,7 @@ export function VoiceNotificationCard({
       <div className="notification-arrival">
         <span>
           <Icon name="route" size={17} />
-          {notification.source} · 약 {notification.distanceMeters} m
+          {notification.source}{notification.distanceMeters > 0 && ` · 약 ${notification.distanceMeters} m`}
         </span>
         <span className="mock-badge">MOCK DATA</span>
       </div>

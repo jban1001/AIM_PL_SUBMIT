@@ -61,15 +61,15 @@ export const communities: {
   {
     id: "destination",
     name: "내 목적지 중심",
-    subtitle: "도착하기 전에 미리",
-    description: "목적지 주변의 소식을 확인하세요. 조회 반경은 미확정입니다.",
+    subtitle: "목적지 · 김포국제공항",
+    description: "내비게이션 목적지인 김포국제공항 주변의 소식입니다.",
     icon: "flag",
   },
   {
     id: "direction",
     name: "내 방향 중심",
-    subtitle: "같은 방향으로 가는 길",
-    description: "내비게이션 경로를 따라 만나는 커뮤니티입니다. 조회 범위는 미확정입니다.",
+    subtitle: "김포국제공항으로 가는 길",
+    description: "내비게이션의 김포국제공항 방면 이동 경로에서 공유된 소식입니다.",
     icon: "route",
   },
 ];
