@@ -262,7 +262,9 @@ export function useReportFlow(props: FlowProps) {
           }, scaled(snapshot, mockConfig.speechEndMs));
         }
       },
-      scaled(snapshot, snapshot.speechFault === "stt" ? 1300 : mockConfig.speechStepMs),
+      snapshot.speechFault === "stt"
+        ? scaled(snapshot, 1300)
+        : scaled({ speed: snapshot.scenario.simulation?.dictationSpeed ?? snapshot.speed }, mockConfig.speechStepMs),
     );
     return () => {
       clearInterval(interval);

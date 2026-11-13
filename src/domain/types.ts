@@ -28,6 +28,7 @@ export interface Scenario {
   vehicleData: Record<string, string | number>;
   examples: AIResult[];
   simulation?: {
+    dictationSpeed?: number;
     initialView?: FeedView;
     afterReportView?: FeedView;
     failFirstReport?: boolean;

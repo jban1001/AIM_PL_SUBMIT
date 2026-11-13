@@ -436,7 +436,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
       delivery.history[selected].find((item) => item.post.id === incoming.post.id) ?? incoming;
     setGleoDemo(null);
     // Receiving a report must not change the selected driving restriction mode.
-    setOpenedReport(null);
+    setOpenedReport({ community: selected, id: event.post.id });
     setViewState("normal");
     receivePost(event);
     window.scrollTo(0, 0);

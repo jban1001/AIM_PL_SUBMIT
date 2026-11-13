@@ -25,6 +25,7 @@ export const congestion: Scenario = {
   category: "교통",
   name: "도로 정체 제보",
   exampleInput,
+  simulation: { dictationSpeed: 0.1 },
   vehicleData: {
     averageSpeed: 8,
     stops: 6,

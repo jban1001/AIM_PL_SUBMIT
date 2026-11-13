@@ -10,6 +10,7 @@ export const parking: Scenario = {
   category: "주차",
   name: "주차 제보",
   exampleInput,
+  simulation: { dictationSpeed: 0.1 },
   vehicleData: {
     location: "비룡 주차장 지하 2층",
     gear: "P",
