@@ -5,6 +5,9 @@ import { processReport } from "../src/services/mockCommunity.ts";
 import { blackIce, matchesInhaBlackIce } from "../src/scenarios/blackIce.ts";
 import { congestion, matchesIncheonCongestion } from "../src/scenarios/congestion.ts";
 import { mockConfig } from "../src/domain/types.ts";
+import { matchReportSimulation } from "../src/scenarios/notifications/index.ts";
+import { parking } from "../src/scenarios/parking.ts";
+import { local } from "../src/scenarios/local.ts";
 
 test("Gleo 제보에서 호출명·앱 대상·등록 명령만 제거한다", () => {
   assert.equal(normalizeGleoReport("글레오, 가지에 인천대교 막힌다고 제보해줘"), "인천대교 막힌다고");
@@ -60,4 +63,34 @@ test("인하대역 블랙아이스 시연은 원본 발화와 실제 GLEO의 짧
   assert.ok(matchesInhaBlackIce("지금까지 앱에 인하대역 3번 출구에 블랙아이스가 있다고 제보해줘.", ""));
   assert.equal(matchesInhaBlackIce("인하대역 3번 출구에 블랙아이스가 없어요.", ""), false);
   assert.equal(matchesInhaBlackIce("인하대역 2번 출구에 블랙아이스가 있어요.", ""), false);
+});
+
+test("입력한 제보의 첫 구절이나 짧은 제목으로 해당 시연을 찾는다", () => {
+  assert.equal(matchReportSimulation("인하대역 3번 출구 근처 블랙아이스"), blackIce);
+  assert.equal(matchReportSimulation("인하대역 3번 출구 근처 블랙아이스 있어요."), blackIce);
+  assert.equal(matchReportSimulation("인하대역 3번 출구 근처 블랙아이스가 없어요."), undefined);
+  assert.equal(matchReportSimulation("인천 대교 진입 구간에서 차가 너무 막혀요. 뒤쪽까지 밀려요"), congestion);
+  assert.equal(matchReportSimulation("인천대로 정체중이라고"), congestion);
+  assert.equal(matchReportSimulation("인천대교 정체", "가지 앱에 인천대로 정체 중이라고 제보해줘."), congestion);
+  assert.equal(matchReportSimulation("인천대로 정체 중이 아니에요"), undefined);
+  assert.equal(matchReportSimulation("경인대로 정체 중이에요"), undefined);
+  assert.equal(matchReportSimulation("블랙아이스", "가지 앱에 제보해줘. 인하대역 3번 출구쯤 블랙아이스 현상 발생해서"), blackIce);
+  assert.equal(matchReportSimulation(parking.exampleInput.split(".")[0]), parking);
+  assert.equal(matchReportSimulation(local.exampleInput.split(".")[0]), local);
+  assert.equal(matchReportSimulation("서울숲 공영주차장이 만차예요"), undefined);
+  assert.equal(matchReportSimulation("인천대교 진입 지점에서 차가 막히지 않아요"), undefined);
+  assert.equal(matchReportSimulation("인하대역 2번 출구쯤 블랙아이스 현상 발생해서"), undefined);
+});
+
+test("시연과 관계없는 글은 입력한 내용으로 등록한다", async () => {
+  const body = "서울숲 공영주차장에 빈 자리가 없어요";
+  assert.equal(matchReportSimulation(body), undefined);
+  const post = await processReport(congestion, body, "nearby", [], false, {
+    aiDelayMs: 0,
+    allowIncompleteDemoSpeech: true,
+    useScenarioTemplate: false,
+  });
+  assert.equal(post.originalBody, body);
+  assert.equal(post.evidence, "");
+  assert.equal(post.category, "기타");
 });

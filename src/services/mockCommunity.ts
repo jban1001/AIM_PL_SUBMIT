@@ -7,7 +7,7 @@ import {
   type Post,
   type Scenario,
 } from "../domain/types.ts";
-import { normalizeReportBody, reportInputError, type GleoReportDetails } from "./reportInput.ts";
+import { conservativeResult, normalizeReportBody, reportInputError, type GleoReportDetails } from "./reportInput.ts";
 
 export const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
@@ -68,6 +68,7 @@ export interface ReportOptions {
   scriptedExample?: boolean;
   allowIncompleteDemoSpeech?: boolean;
   simulationCategory?: Category;
+  useScenarioTemplate?: boolean;
   vehicleDataAvailable?: boolean;
   similarPostsAvailable?: boolean;
   source?: InputMode;
@@ -109,7 +110,7 @@ export async function processReport(
   options.onRequest?.(input);
   await wait(options.aiDelayMs ?? mockConfig.aiDelayMs);
   if (fail) throw new Error("제보를 정리하지 못했어요");
-  const result = scenario.process(input.body, input);
+  const result = options.useScenarioTemplate === false ? conservativeResult(input.body) : scenario.process(input.body, input);
   return {
     ...result,
     category: options.simulationCategory ?? result.category,

@@ -8,7 +8,7 @@ export function matchesInhaBlackIce(utterance: string | undefined, title: string
   const body = utterance || title;
   if (matchesDemoUtterance(body, blackIce.exampleInput)) return true;
   const compact = normalizeGleoReport(body).replace(/[\s,.!?。]+/gu, "");
-  return /^인하대역3번출구(?:쯤|부근|근처|방면|인근)?(?:에|에서)?블랙아이스(?:가있(?:어요|다고)|발생(?:했어요|했다고)?|의심)?(?:제보)?$/u.test(compact);
+  return /^인하대역3번출구(?:쯤|부근|근처|방면|인근)?(?:에|에서)?블랙아이스(?:가?있(?:어요|다고|습니다)|발생(?:했어요|했다고)?|의심)?(?:제보)?$/u.test(compact);
 }
 
 export const blackIce: Scenario = {
@@ -32,17 +32,17 @@ export const blackIce: Scenario = {
     },
     {
       category: "교통",
-      summary: "강변북로 성수 방면, 차량 흐름이 느려요.\n평소보다 여유 있게 이동하세요.",
+      summary: "독배로 인하대역 방면, 차량 흐름이 느려요.\n평소보다 여유 있게 이동하세요.",
       evidence: "모의 주행 속도가 최근 5분간 평균 18km/h로 설정되었습니다.",
     },
     {
       category: "주차",
-      summary: "서울숲 공영주차장, 만차 제보가 있어요.\n주변 주차장도 함께 확인해 주세요.",
+      summary: "학익시장 공영주차장, 만차 제보가 있어요.\n주변 주차장도 함께 확인해 주세요.",
       evidence: "",
     },
     {
       category: "지역 정보",
-      summary: "성수역 인근에 잠시 쉬어갈 수 있는\n24시간 편의시설이 있어요.",
+      summary: "인하대역 근처에 늦게까지 여는\n편의점이 있어요.",
       evidence: "",
     },
     {

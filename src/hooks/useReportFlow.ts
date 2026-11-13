@@ -12,6 +12,7 @@ import { processReport, scenarioReportInputError, type ReportOptions } from "../
 import { normalizeReportBody, type GleoReportDetails } from "../services/reportInput";
 
 import { listenWithAppMic } from "../services/appMic";
+import { matchReportSimulation } from "../scenarios/notifications";
 
 export type ReportPhase =
   | "editing"
@@ -52,7 +53,7 @@ interface FlowProps {
   getPosts: (community: CommunityId) => Post[];
   getOptions: () => ReportOptions & { fail: boolean; offline: boolean };
   consumeSpeechFault: () => SpeechFault;
-  onPublished: (post: Post, session: Pick<ReportSession, "mode" | "voiceInput" | "scriptedExample">) => void;
+  onPublished: (post: Post, session: Pick<ReportSession, "scenario" | "voiceInput" | "scriptedExample">) => void;
 }
 export function useReportFlow(props: FlowProps) {
   const latest = useRef(props);
@@ -131,12 +132,18 @@ export function useReportFlow(props: FlowProps) {
     const snapshot = current.current;
     if (!snapshot || busy.current) return;
     const body = normalizeReportBody(text ?? snapshot.body);
+    const matchedScenario = snapshot.scriptedExample || !body
+      ? undefined
+      : matchReportSimulation(body, snapshot.reportDetails?.utterance);
+    const reportScenario = matchedScenario ?? snapshot.scenario;
+    const reportBody = matchedScenario?.exampleInput ?? body;
+    const scriptedExample = snapshot.scriptedExample || !!matchedScenario;
     const validation = {
       reportDetails: snapshot.reportDetails,
-      scriptedExample: snapshot.scriptedExample,
+      scriptedExample,
       allowIncompleteDemoSpeech: snapshot.allowIncompleteDemoSpeech && snapshot.voiceInput !== "mock",
     };
-    const issue = scenarioReportInputError(snapshot.scenario, body, validation);
+    const issue = scenarioReportInputError(reportScenario, reportBody, validation);
     if (issue) {
       patch({ body, phase: "insufficient", error: issue.message });
       return;
@@ -154,8 +161,8 @@ export function useReportFlow(props: FlowProps) {
     patch({ body, phase: "processing", error: "" });
     try {
       const post = await processReport(
-        snapshot.scenario,
-        body,
+        reportScenario,
+        reportBody,
         snapshot.community,
         latest.current.getPosts(snapshot.community),
         options.fail,
@@ -163,12 +170,15 @@ export function useReportFlow(props: FlowProps) {
           ...options,
           source: snapshot.mode,
           ...validation,
-          simulationCategory: snapshot.simulationCategory,
+          useScenarioTemplate: scriptedExample,
+          simulationCategory: matchedScenario?.category ?? snapshot.simulationCategory,
           aiDelayMs: scaled(snapshot, mockConfig.aiDelayMs),
         },
       );
       if (!alive.current || current.current?.id !== snapshot.id) return;
-      latest.current.onPublished(post, snapshot);
+      latest.current.onPublished({ ...post, originalBody: body }, {
+        scenario: reportScenario, voiceInput: snapshot.voiceInput, scriptedExample,
+      });
       patch({ phase: "success", error: "" });
     } catch (err) {
       if (alive.current && current.current?.id === snapshot.id)

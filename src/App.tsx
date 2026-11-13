@@ -26,8 +26,8 @@ import {
   type VehicleState,
 } from "./domain/types";
 import { scenarios } from "./scenarios";
-import { congestion, matchesIncheonCongestion } from "./scenarios/congestion";
-import { blackIce, matchesInhaBlackIce } from "./scenarios/blackIce";
+import { congestion } from "./scenarios/congestion";
+import { blackIce } from "./scenarios/blackIce";
 import {
   createPosts,
   deleteOwnPost,
@@ -55,10 +55,10 @@ import {
 } from "./scenarios/notifications";
 import { preferredPosts } from "./domain/preferences";
 
-import { listenWithAppMic } from "./services/appMic";
+import { listenWithAppMic, REPORT_END_PHRASE } from "./services/appMic";
 import { playMockTTS } from "./services/mockTTS";
 import { playNotificationChime } from "./services/notificationChime";
-import { matchesDemoUtterance, normalizeGleoReport, voiceCommandBody, type MissingReportField } from "./services/reportInput";
+import { normalizeGleoReport, voiceCommandBody, type MissingReportField } from "./services/reportInput";
 
 declare global {
   interface Window {
@@ -143,7 +143,7 @@ type GleoReportPayload = { body: string; location?: string; condition?: string; 
 
 const REAR_APPROACH_DELAY_MS = 15_000;
 
-type RelayReport = { post: Post; simulation: SimulationTab };
+type RelayReport = { post: Post; simulation?: SimulationTab };
 
 type RelayDemo = {
   role: "front" | "rear";
@@ -163,7 +163,9 @@ function DemoVehicleControls({ relay }: { relay: RelayDemo }) {
       <span className="vehicle-relay-status" role="status">
         {front
           ? relay.report ? "등록 완료 · " + relay.report.post.summary : "앞차 제보를 등록하면 뒤차로 전환할 수 있어요."
-          : `전방 ${relay.distance}m · ${relay.distance > 500 ? "접근 중" : "수신 완료"}`}
+          : relay.report?.simulation
+            ? `전방 ${relay.distance}m · ${relay.distance > 500 ? "접근 중" : "수신 완료"}`
+            : "게시판에 새 글이 등록됐어요."}
       </span>
       <button
         type="button"
@@ -225,7 +227,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
   const [selected, setSelected] = useState<CommunitySelectionState>(relay.report?.post.community ?? "nearby");
   const receivedRelayId = useRef<string | null>(null);
   const gleoRequest = useRef<string | null>(null);
-  const [scenarioId, setScenarioId] = useState(relay.report?.simulation.reportScenarioId ?? scenarios[0].id);
+  const [scenarioId, setScenarioId] = useState(relay.report?.simulation?.reportScenarioId ?? scenarios[0].id);
   const [gleoDemo, setGleoDemo] = useState<{ scenarioId: string; community: CommunityId } | null>(null);
   const scenario = scenarios.find((item) => item.id === scenarioId)!;
   const simulation = simulationTabs.find((tab) => tab.reportScenarioId === scenarioId)!;
@@ -289,9 +291,12 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
       setSpeechFault("none");
       return fault;
     },
-    onPublished: (result, { mode, voiceInput, scriptedExample }) => {
-      const post = relay.role === "front" && (mode === "voice" || voiceInput === "mic" || scriptedExample)
-        ? makeFrontDemoPost(result, simulation.notification, !vehicleUnavailable)
+    onPublished: (result, { scenario: reportScenario, voiceInput, scriptedExample }) => {
+      const reportSimulation = scriptedExample
+        ? simulationTabs.find((tab) => tab.reportScenarioId === reportScenario.id)
+        : undefined;
+      const post = relay.role === "front" && reportSimulation
+        ? makeFrontDemoPost(result, reportSimulation.notification, !vehicleUnavailable)
         : result;
       updateFeed(post.community, (current) => ({
         ...current,
@@ -299,14 +304,14 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
         visible: [post, ...current.visible],
         scroll: 0,
       }));
-      if (relay.role === "front") relay.publish({ post, simulation });
+      if (relay.role === "front") relay.publish({ post, simulation: reportSimulation });
       if (voiceInput === "gleo" && gleoRequest.current) {
         window.GazeeGleo?.complete(gleoRequest.current, true);
         gleoRequest.current = null;
       }
       setSelected(post.community);
       window.scrollTo(0, 0);
-      setViewState(scenario.simulation?.afterReportView ?? "normal");
+      setViewState(reportScenario.simulation?.afterReportView ?? "normal");
       setToast("제보가 등록되었습니다.");
     },
   });
@@ -333,19 +338,12 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
     const demo = gleoDemo?.scenarioId === scenarioId
       ? simulationTabs.find((tab) => tab.reportScenarioId === scenarioId && tab.reportMode === "voice")
       : undefined;
-    const fixedScenario = matchesIncheonCongestion(details?.utterance, title) ? congestion
-      : matchesInhaBlackIce(details?.utterance, title) ? blackIce : undefined;
-    const reportScenario = fixedScenario ?? scenario;
-    const scriptedExample = !!fixedScenario || (!!demo && matchesDemoUtterance(details?.utterance || title, scenario.exampleInput));
-    if (!title && !scriptedExample && allowIncompleteDemoSpeech) {
+    if (!title) {
       window.GazeeGleo?.complete(requestId, false);
       return;
     }
-    const body = scriptedExample ? reportScenario.exampleInput : title;
-    if (!flow.begin("voice", demo ? gleoDemo!.community : selected, reportScenario, body, "gleo", details, {
-      scriptedExample,
+    if (!flow.begin("voice", demo ? gleoDemo!.community : selected, scenario, title, "gleo", details, {
       allowIncompleteDemoSpeech,
-      simulationCategory: scriptedExample || demo ? reportScenario.category : undefined,
     })) {
       window.GazeeGleo?.complete(requestId, false);
       return;
@@ -453,7 +451,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
   }
 
   const receiveRelay = useEffectEvent(({ post, simulation }: RelayReport, distance: number) => {
-    if (receivedRelayId.current === post.id) return;
+    if (!simulation || receivedRelayId.current === post.id) return;
     const event = makeRearNotification(post, distance, simulation.notification);
     if (!event) return;
     receivedRelayId.current = post.id;
@@ -768,7 +766,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
                       relay.role === "front" && !gleoDemo
                         ? {
                             label: "음성으로 제보",
-                            hint: "마이크 버튼을 누르고 제보할 내용을 말해 주세요.",
+                            hint: `마이크를 누르고 내용을 말한 뒤 “${REPORT_END_PHRASE}”라고 말해 주세요.`,
                             onClick: () => {
                               setGleoDemo(null);
                               if (flow.begin("voice", selected, scenario, undefined, "mic", undefined, {
@@ -1063,7 +1061,7 @@ export default function App() {
   const report = publishedReports[0] ?? null;
   const [distance, setDistance] = useState(850);
   useEffect(() => {
-    if (role !== "rear" || !report) return;
+    if (role !== "rear" || !report?.simulation) return;
     const targetDistance = report.simulation.notification.createEvent(report.post.community).distanceMeters;
     const timer = window.setTimeout(() => setDistance(targetDistance), REAR_APPROACH_DELAY_MS);
     return () => window.clearTimeout(timer);

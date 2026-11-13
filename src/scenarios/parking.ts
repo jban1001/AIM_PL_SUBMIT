@@ -18,7 +18,7 @@ export const parking: Scenario = {
     batteryLevel: 25,
     chargingStatus: "충전 진행 안 됨",
   },
-  examples: [{ category: "주차", summary: "성수 공영주차장 여유 공간 제보", evidence: "" }],
+  examples: [{ category: "주차", summary: "용현시장 제3공영주차장에 빈자리가 있어요", evidence: "" }],
   process: (body, context) =>
     normalizeReportBody(body) === normalizeReportBody(exampleInput)
       ? {

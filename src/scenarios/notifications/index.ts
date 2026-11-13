@@ -3,8 +3,11 @@ import { ParkingScenario } from "./parking.ts";
 import { TrafficScenario } from "./traffic.ts";
 import { LocalScenario } from "./local.ts";
 import type { ScenarioEventHandler } from "../../domain/notifications.ts";
-import { blackIce } from "../blackIce.ts";
-import { congestion } from "../congestion.ts";
+import { blackIce, matchesInhaBlackIce } from "../blackIce.ts";
+import { congestion, matchesIncheonCongestion } from "../congestion.ts";
+import { parking } from "../parking.ts";
+import { local } from "../local.ts";
+import { matchesDemoUtterance, normalizeGleoReport } from "../../services/reportInput.ts";
 
 // reportMode
 // - "voice": 주행 중 '제보할게' 음성 제보 (주행 제한 ON/OFF 모두)
@@ -27,6 +30,24 @@ export const simulationTabs: SimulationTab[] = [
   { id: "local", name: "지역", reportScenarioId: "local", notification: LocalScenario, reportMode: "dictation", speed: 0.5 },
   { id: "road-hazard", name: "도로 위험", reportScenarioId: "black-ice", notification: BlackIceScenario, reportMode: "voice", speed: 0.5, gleoExample: `지금 가지 앱에 제보해 줘. ${blackIce.exampleInput}` },
 ];
+
+export function matchReportSimulation(body: string, utterance?: string) {
+  const spoken = normalizeGleoReport(utterance || body)
+    .replace(/^(?:지금|방금)\s+/u, "")
+    .replace(/[^\p{L}\p{N}]/gu, "");
+  if (!spoken) return undefined;
+
+  if (matchesIncheonCongestion(utterance || undefined, body)
+      || /^인천대교진입(?:지점|구간)(?:에서는|에서|에선)?(?:지금)?차가(?:너무)?막혀요/u.test(spoken)) return congestion;
+  if (matchesInhaBlackIce(utterance, body)
+      || /^인하대역3번출구(?:쯤|부근|근처|방면|인근)?(?:에서|에)?블랙아이스현상발생해서/u.test(spoken)) return blackIce;
+
+  return [parking, local].find((scenario) => {
+    if (matchesDemoUtterance(utterance || body, scenario.exampleInput)) return true;
+    const opening = scenario.exampleInput.split(/[.!?。！？]/u, 1)[0].replace(/[^\p{L}\p{N}]/gu, "");
+    return spoken.startsWith(opening);
+  });
+}
 
 // Extend event rules here; the shared delivery UI never needs scenario branches.
 export const notificationScenarios: ScenarioEventHandler[] = [
