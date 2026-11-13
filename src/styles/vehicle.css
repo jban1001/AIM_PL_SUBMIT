@@ -186,3 +186,7 @@
   box-shadow: 0 0 0 4px rgba(111, 71, 196, 0.35);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
+
+.post-detail-link { display: block; width: 100%; text-align: left; color: inherit; font: inherit; cursor: pointer; border-radius: 4px; }
+.post-detail-link:hover { color: #7045cb; }
+.post-detail-link:focus-visible { outline: 2px solid #7045cb; outline-offset: 5px; }

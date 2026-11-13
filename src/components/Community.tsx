@@ -95,14 +95,17 @@ export function PostCard({
   post,
   onDelete,
   compact = false,
+  onOpen,
 }: {
   post: Post;
   onDelete?: (id: string) => void;
   compact?: boolean;
+  onOpen?: (post: Post) => void;
 }) {
   const minutes = Math.max(0, Math.floor((Date.now() - post.createdAt) / 60000));
   return (
-    <article className={`post-card ${compact ? "notification-post" : ""}`}>
+    <article className={`post-card ${compact ? "notification-post" : ""}`}
+      onClick={onOpen ? () => onOpen(post) : undefined}>
       <div className="post-meta">
         <CategoryLabel category={post.category} />
         <div className="post-meta-right">
@@ -118,14 +121,17 @@ export function PostCard({
             <button
               className="delete-post"
               aria-label={`${post.summary} 삭제`}
-              onClick={() => onDelete(post.id)}
+              onClick={(event) => { event.stopPropagation(); onDelete(post.id); }}
             >
               삭제
             </button>
           )}
         </div>
       </div>
-      <h3>{post.summary}</h3>
+      <h3>{onOpen ? <button type="button" className="post-detail-link"
+        onClick={(event) => { event.stopPropagation(); onOpen(post); }} aria-label={`${post.summary} 상세 보기`}>
+        {post.summary}
+      </button> : post.summary}</h3>
       {post.description && <p className="post-description">{post.description}</p>}
       {post.evidence && (
         <div className="post-evidence">
@@ -191,6 +197,8 @@ export function PostList({
   community,
   onRetry,
   onDelete,
+  onOpen,
+  canOpen,
   readOnly = false,
 }: {
   posts: Post[];
@@ -205,6 +213,8 @@ export function PostList({
   community: CommunityId;
   onRetry: () => void;
   onDelete: (id: string) => void;
+  onOpen?: (post: Post) => void;
+  canOpen?: (post: Post) => boolean;
   readOnly?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -230,7 +240,8 @@ export function PostList({
       ) : (
         <>
           {posts.map((post) => (
-            <PostCard post={post} key={post.id} onDelete={onDelete} />
+            <PostCard post={post} key={post.id} onDelete={onDelete}
+              onOpen={!readOnly && onOpen && canOpen?.(post) ? onOpen : undefined} />
           ))}
           <button
             className="load-more"

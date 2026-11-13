@@ -235,6 +235,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
   const drivingRestrictionState: DrivingRestrictionState = driving
     ? "DRIVING_RESTRICTED"
     : "UNRESTRICTED";
+  const [openedReport, setOpenedReport] = useState<{ community: CommunityId; id: string } | null>(null);
   const [wakeListening, setWakeListening] = useState(false);
   const [wakeStatus, setWakeStatus] = useState("");
   const [ttsTestStatus, setTtsTestStatus] = useState("");
@@ -354,7 +355,9 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
     setWakeListening(false);
   });
   const readForGleo = useEffectEvent((requestId: string) => {
-    const received = delivery.history[selected][0]
+    const received = openedReport?.community === selected
+      ? delivery.history[selected].find((item) => item.post.id === openedReport.id)
+      : delivery.history[selected][0]
       ?? Object.values(delivery.history).flat().sort((a, b) => b.receivedAt - a.receivedAt)[0];
     window.GazeeGleo?.completeRead(requestId, received?.speech ?? "");
   });
@@ -412,6 +415,11 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
   }, [wakeListening, canListenForWake]);
 
   const notification = delivery.history[selected][0];
+  const openedNotification = !driving && openedReport?.community === selected
+    ? delivery.history[selected].find((item) => item.post.id === openedReport.id)
+    : undefined;
+  const displayedNotification = openedNotification ?? notification;
+  useEffect(() => { setOpenedReport(null); }, [selected, driving, scenarioId]);
   const latestOwnPost = visiblePosts.find((post) => post.authorId === CURRENT_USER_ID);
   const publishedPost = latestOwnPost && (!notification || latestOwnPost.createdAt >= notification.receivedAt)
     ? latestOwnPost
@@ -427,7 +435,9 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
     const event =
       delivery.history[selected].find((item) => item.post.id === incoming.post.id) ?? incoming;
     setGleoDemo(null);
-    setVehicleState("driving");
+    // Receiving a report must not change the selected driving restriction mode.
+    setOpenedReport(null);
+    setViewState("normal");
     receivePost(event);
     window.scrollTo(0, 0);
   }
@@ -537,12 +547,12 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
     setFailAI(next.simulation?.failFirstReport ?? false);
   }
   function readReceivedReport() {
-    if (!notification || ttsTesting || reportSpeechController.current || session || wakeListening || vehicleScreen !== "NORMAL") return;
+    if (!displayedNotification || ttsTesting || reportSpeechController.current || session || wakeListening || vehicleScreen !== "NORMAL") return;
     const controller = new AbortController();
     reportSpeechController.current = controller;
     setTtsTesting(true);
     setReportSpeechStatus("Pleos TTS 준비 중…");
-    void playMockTTS(notification.speech, {
+    void playMockTTS(displayedNotification.speech, {
       signal: controller.signal, manual: true, sdkOnly: true,
       onProgress: setReportSpeechStatus,
       onStart: (engine) => setReportSpeechStatus(`제보 음성 안내 중 · ${engine}`),
@@ -566,7 +576,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
   useEffect(() => {
     setReportSpeechStatus("");
     return () => { reportSpeechController.current?.abort(); };
-  }, [notification?.post.id, selected, scenarioId]);
+  }, [displayedNotification?.post.id, openedReport?.id, selected, scenarioId]);
   function testTtsOutput() {
     if (ttsTestController.current || busy || wakeListening) return;
     const controller = new AbortController();
@@ -667,7 +677,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
                     onRetry={flow.retry}
                     onExample={() => flow.setBody(touchSession.scenario.exampleInput)}
                   />
-                ) : (
+                ) : openedNotification ? null : (
                   <section className="feed-panel">
                     <div className="feed-heading">
                       <div>
@@ -709,6 +719,12 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
                       loadingMore={loadingMore}
                       onRetry={() => setOffline(false)}
                       onDelete={removePost}
+                      canOpen={(post) => delivery.history[selected].some((item) => item.post.id === post.id)}
+                      onOpen={(post) => {
+                        if (blocked || readOnly) return;
+                        setOpenedReport({ community: selected, id: post.id });
+                        window.scrollTo(0, 0);
+                      }}
                     />
                     <div className="feed-footer">
                       <Icon name="refresh" size={12} />
@@ -734,21 +750,22 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
                   />
                 </div>
               ) : (
-                driving && (
+                (driving || openedNotification) && (
                   <DrivingRestrictionPanel
                     communityName={community.name}
-                    notification={notification}
-                    publishedPost={publishedPost}
-                    playback={delivery.stateFor(notification?.post.id ?? "")}
+                    notification={displayedNotification}
+                    publishedPost={driving ? publishedPost : undefined}
+                    onBack={!driving ? () => setOpenedReport(null) : undefined}
+                    playback={delivery.stateFor(displayedNotification?.post.id ?? "")}
                     speechAction={{
                       onPlay: readReceivedReport,
-                      enabled: !!notification && !session && !wakeListening && !ttsTesting && vehicleScreen === "NORMAL",
+                      enabled: !!displayedNotification && !session && !wakeListening && !ttsTesting && vehicleScreen === "NORMAL",
                       status: reportSpeechStatus,
                       playing: !!reportSpeechController.current && ttsTesting,
                     }}
                     enabled
                     voiceAction={window.GazeeMic ? (
-                      relay.role === "front"
+                      relay.role === "front" && !gleoDemo
                         ? {
                             label: "음성으로 제보",
                             hint: "마이크 버튼을 누르고 제보할 내용을 말해 주세요.",
@@ -769,7 +786,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
                           }
                     ) : undefined}
                     onPlay={() => {
-                      if (notification) delivery.retryChime(notification);
+                      if (displayedNotification) delivery.retryChime(displayedNotification);
                     }}
                   />
                 )
@@ -849,7 +866,11 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
           onSelect={changeScenario}
           onGleo={window.GazeeGleo && vehicleScreen === "NORMAL" ? () => {
             setWakeListening(false);
+            setOpenedReport(null);
             setGleoDemo(gleoDemo ? null : { scenarioId, community: selected });
+            // Show the existing waiting card before the first report arrives.
+            // Starting a Gleo demo does not switch roles or fabricate a report.
+            if (driving && !gleoDemo) window.scrollTo(0, 0);
           } : undefined}
           gleoExample={gleoDemo ? simulationTabs.find((tab) => tab.reportScenarioId === gleoDemo.scenarioId)?.gleoExample : undefined}
           onReport={() => {

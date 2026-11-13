@@ -13,6 +13,7 @@ export function DrivingRestrictionPanel({
   onPlay,
   voiceAction,
   speechAction,
+  onBack,
   readOnly = false,
 }: {
   communityName: string;
@@ -23,23 +24,26 @@ export function DrivingRestrictionPanel({
   onPlay: () => void;
   speechAction?: { onPlay: () => void; enabled: boolean; status: string; playing: boolean };
   readOnly?: boolean;
+  onBack?: () => void;
   voiceAction?: { label: string; hint: string; pressed?: boolean; onClick: () => void };
 }) {
   return (
     <section
       className="driving-restriction-panel"
-      aria-label="주행 중 커뮤니티"
-      data-restriction-state="DRIVING_RESTRICTED"
+      aria-label={onBack ? "수신 제보 상세" : "주행 중 커뮤니티"}
+      data-restriction-state={onBack ? "UNRESTRICTED" : "DRIVING_RESTRICTED"}
     >
       <div className="driving-panel-heading">
         <span>
           <Icon name="community" size={17} />
           {communityName}
         </span>
-        <span className="driving-mode-badge">
+        {onBack ? <button type="button" className="secondary-button" onClick={onBack}>
+          목록으로 돌아가기
+        </button> : <span className="driving-mode-badge">
           <Icon name="lock" size={12} />
           게시글 목록 제한
-        </span>
+        </span>}
       </div>
       {publishedPost ? (
         <section className="published-report" aria-label="등록된 내 제보">
@@ -119,8 +123,7 @@ export function DrivingRestrictionPanel({
       </div>
       <div className="policy-note">
         <Icon name="shield" size={15} />
-        주행 중 탭 터치는 시연 전용입니다. Pleos 정책 검증 및 실제 차량 연동 전
-        상태입니다.
+        {onBack ? "이용자 제보는 검증된 사실이 아닙니다." : "주행 중 탭 터치는 시연 전용입니다. Pleos 정책 검증 및 실제 차량 연동 전 상태입니다."}
       </div>
       </>}
     </section>
