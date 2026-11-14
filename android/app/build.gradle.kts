@@ -57,6 +57,18 @@ android {
         versionName = "0.1.0"
     }
 
+    buildTypes {
+        release {
+            // Contest submission: an installable release APK that behaves like the debug build.
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = true
+        }
+    }
+
+    // Reuse the debug manifest overlay (distraction-optimized activity, gear/speed
+    // permissions) so the release build keeps driving mode instead of being blocked.
+    sourceSets.getByName("release").manifest.srcFile("src/debug/AndroidManifest.xml")
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
