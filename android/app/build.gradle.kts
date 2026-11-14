@@ -57,6 +57,15 @@ android {
         versionName = "0.1.0"
     }
 
+    buildTypes {
+        release {
+            // Contest submission: an installable release APK that keeps the
+            // emulator demo mode (gated on FLAG_DEBUGGABLE in MainActivity).
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = true
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11

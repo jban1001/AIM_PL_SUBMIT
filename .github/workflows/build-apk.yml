@@ -1,0 +1,82 @@
+name: Build release APK
+
+# Builds the installable release APK on every push to main and stores it in apk/.
+# If the APK is too large for a repository file, it is published to GitHub Releases instead.
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "apk/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      APK_NAME: AIM_GAZEE_release.apk
+      # GitHub rejects repository files over 100 MB; keep a safety margin.
+      REPO_FILE_LIMIT: 95000000
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install web dependencies
+        run: pnpm install --frozen-lockfile
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - name: Build release APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --console=plain
+
+      - name: Collect APK
+        id: apk
+        run: |
+          mkdir -p apk
+          cp android/app/build/outputs/apk/release/app-release.apk "apk/$APK_NAME"
+          size=$(stat -c %s "apk/$APK_NAME")
+          echo "size=$size" >> "$GITHUB_OUTPUT"
+          echo "APK: apk/$APK_NAME ($size bytes)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AIM_GAZEE_release
+          path: apk/${{ env.APK_NAME }}
+
+      - name: Commit APK to apk/
+        if: fromJSON(steps.apk.outputs.size) < fromJSON(env.REPO_FILE_LIMIT)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "apk/$APK_NAME"
+          git commit -m "chore: release APK 빌드 (${GITHUB_SHA::7}) [skip ci]" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
+
+      - name: Publish to GitHub Releases (APK too large for the repository)
+        if: fromJSON(steps.apk.outputs.size) >= fromJSON(env.REPO_FILE_LIMIT)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk-${{ github.run_number }}
+          name: AIM_GAZEE release APK (${{ github.sha }})
+          files: apk/${{ env.APK_NAME }}
