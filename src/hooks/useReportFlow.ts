@@ -310,9 +310,10 @@ export function useReportFlow(props: FlowProps) {
   }, [session?.id, session?.phase, session?.demo]);
   useEffect(() => {
     if (session?.phase !== "success") return;
-    const timeout = setTimeout(closeSession, scaled(session, mockConfig.successMs));
+    const duration = session.voiceInput === "gleo" ? 4_000 : scaled(session, mockConfig.successMs);
+    const timeout = setTimeout(closeSession, duration);
     return () => clearTimeout(timeout);
-  }, [session?.phase, session?.id]);
+  }, [session?.phase, session?.id, session?.voiceInput]);
   return {
     session,
     begin,

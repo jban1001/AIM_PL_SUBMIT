@@ -72,12 +72,14 @@ final class GleoReportAction {
         else deliver.accept(requestId, pending);
     }
 
-    void finish(String id, boolean success) {
+    void finish(String id, boolean success, String announcement) {
         if (!id.equals(requestId) || !ACTION.equals(pendingAction)) return;
-        finish(success ? "success" : "fail", success
-                ? "The road report was registered."
-                : "The road report could not be registered.", success
-                ? "[{\"confirmation\":\"제보가 등록되었어요.\"}]" : null);
+        if (!success) {
+            finish("fail", "The road report could not be registered.", null);
+            return;
+        }
+        finish("success", "The road report was registered. Read the Korean announcement aloud.",
+                "[{\"announcement\":" + JSONObject.quote(announcement) + "}]");
     }
 
     void requestDetails(String id, String missing) {

@@ -80,7 +80,6 @@ const categoryStyles: Record<Category, string> = {
   교통: "traffic",
   주차: "parking",
   "지역 정보": "local",
-  기타: "other",
 };
 export function CategoryLabel({ category }: { category: Category }) {
   return (
@@ -137,7 +136,7 @@ export function PostCard({
           <Icon name="spark" size={15} />
           <p>
             <span>제보 근거</span>
-            {post.evidence}
+            차량 데이터로 확인결과, {post.evidence}
           </p>
         </div>
       )}

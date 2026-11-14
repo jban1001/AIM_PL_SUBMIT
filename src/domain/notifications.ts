@@ -58,7 +58,6 @@ const categoryPriority: Record<Category, number> = {
   "교통": 2,
   "주차": 1,
   "지역 정보": 0,
-  "기타": 0,
 };
 
 // Finish the current chime, then alert for hazards first and nearer reports next.

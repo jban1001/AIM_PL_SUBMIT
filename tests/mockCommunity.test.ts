@@ -147,7 +147,27 @@ test("임의 입력에 예시 시나리오의 사고 원인이나 차량 관측�
   );
   assert.equal(post.summary, "목적지 주차장에 자리가 없습니다");
   assert.equal(post.evidence, "");
-  assert.equal(post.category, "기타");
+  assert.equal(post.category, "주차");
+});
+test("일반 제보는 내용에 따라 네 가지 범주 중 하나로 분류한다", async () => {
+  const reports = [
+    ["용현시장 입구에 차가 막혀요", "교통"],
+    ["학익동 주차장 출구 근처가 미끄러워요", "도로 위험"],
+    ["학익시장 충전기가 작동하지 않아요", "주차"],
+    ["인하대 후문 편의점이 새로 열었어요", "지역 정보"],
+    ["오늘도 안전하게 이동하세요", "지역 정보"],
+  ] as const;
+
+  for (const [body, category] of reports) {
+    const post = await processReport(congestion, body, "nearby", [], false, {
+      aiDelayMs: 0,
+      allowIncompleteDemoSpeech: true,
+      useScenarioTemplate: false,
+    });
+    assert.equal(post.category, category, body);
+    assert.equal(post.summary, body);
+    assert.equal(post.evidence, "");
+  }
 });
 test("AI 실패도 한 번의 요청이며 대체 게시글이 생성되지 않는다", async () => {
   let calls = 0;

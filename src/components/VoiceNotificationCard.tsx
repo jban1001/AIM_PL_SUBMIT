@@ -74,7 +74,7 @@ export function VoiceNotificationCard({
       </div>
       <p className="notification-mock-note">
         <Icon name="info" size={14} />
-        차량 근거는 시연용 Mock 데이터이며, 실제 센서로 확인한 결과가 아닙니다.
+        시연용 제보 데이터
       </p>
     </section>
   );

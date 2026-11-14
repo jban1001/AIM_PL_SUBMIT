@@ -382,8 +382,8 @@ public final class MainActivity extends Activity {
         }
 
         @JavascriptInterface
-        public void complete(String id, boolean success) {
-            runOnUiThread(() -> gleo.finish(id, success));
+        public void complete(String id, boolean success, String announcement) {
+            runOnUiThread(() -> gleo.finish(id, success, announcement));
         }
 
         @JavascriptInterface

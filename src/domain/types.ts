@@ -1,5 +1,5 @@
 export type CommunityId = "nearby" | "direction" | "destination";
-export type Category = "교통" | "도로 위험" | "주차" | "지역 정보" | "기타";
+export type Category = "교통" | "도로 위험" | "주차" | "지역 정보";
 export type FeedView = "normal" | "empty" | "loading";
 export type VehicleState = "parked" | "stopped" | "driving";
 export type InputMode = "touch" | "voice";

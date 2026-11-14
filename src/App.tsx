@@ -70,7 +70,7 @@ declare global {
     selectGazeeDemoRole?: (role: RelayDemo["role"]) => "ok" | "app-not-ready" | "report-required";
     GazeeGleo?: {
       ready(): void;
-      complete(requestId: string, success: boolean): void;
+      complete(requestId: string, success: boolean, announcement: string): void;
       requestDetails(requestId: string, missing: MissingReportField): void;
       completeRead(requestId: string, announcement: string): void;
     };
@@ -85,13 +85,11 @@ function VehicleRestrictionScreen({
   selected = "nearby",
   onSelect,
   notification,
-  relay,
 }: {
   mode: Exclude<VehicleScreen, "NORMAL">;
   selected?: CommunityId;
   onSelect?: (id: CommunityId) => void;
   notification?: MockNotificationData;
-  relay?: RelayDemo;
 }) {
   const community = communities.find((item) => item.id === selected)!;
   const driving = mode === "DRIVING";
@@ -131,12 +129,6 @@ function VehicleRestrictionScreen({
           )}
         </main>
       </VehicleFrame>
-      {relay && (
-        <details className="simulation-console" aria-label="시연 조작 영역">
-          <summary>시연 조작 열기</summary>
-          <DemoVehicleControls relay={relay} />
-        </details>
-      )}
     </div>
   );
 }
@@ -218,8 +210,9 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
   onReset: () => void;
   preferredCategories: Category[];
 }) {
+  const inPleos = window.GazeeVehicle !== undefined;
   const [selected, setSelected] = useState<CommunitySelectionState>(relay.report?.post.community ?? "nearby");
-  const receivedRelayId = useRef<string | null>(null);
+  const receivedRelayIds = useRef(new Set<string>());
   const gleoRequest = useRef<string | null>(null);
   const [scenarioId, setScenarioId] = useState(relay.report?.simulation?.reportScenarioId ?? scenarios[0].id);
   const [gleoDemo, setGleoDemo] = useState<{ scenarioId: string; community: CommunityId } | null>(null);
@@ -300,13 +293,13 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
       }));
       if (relay.role === "front") relay.publish({ post, simulation: reportSimulation });
       if (voiceInput === "gleo" && gleoRequest.current) {
-        window.GazeeGleo?.complete(gleoRequest.current, true);
+        const announcement = [post.summary + ".", post.description, "제보가 등록되었습니다."].filter(Boolean).join(" ");
+        window.GazeeGleo?.complete(gleoRequest.current, true, announcement);
         gleoRequest.current = null;
       }
       setSelected(post.community);
       window.scrollTo(0, 0);
       setViewState(reportScenario.simulation?.afterReportView ?? "normal");
-      setToast("제보가 등록되었습니다.");
     },
   });
   const session = flow.session;
@@ -333,13 +326,13 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
       ? simulationTabs.find((tab) => tab.reportScenarioId === scenarioId && tab.reportMode === "voice")
       : undefined;
     if (!title) {
-      window.GazeeGleo?.complete(requestId, false);
+      window.GazeeGleo?.complete(requestId, false, "");
       return;
     }
     if (!flow.begin("voice", demo ? gleoDemo!.community : selected, scenario, title, "gleo", details, {
       allowIncompleteDemoSpeech,
     })) {
-      window.GazeeGleo?.complete(requestId, false);
+      window.GazeeGleo?.complete(requestId, false, "");
       return;
     }
     gleoRequest.current = requestId;
@@ -369,12 +362,12 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
     return () => {
       window.removeEventListener("gazee-gleo-report", receive);
       window.removeEventListener("gazee-gleo-read", read);
-      if (gleoRequest.current) bridge.complete(gleoRequest.current, false);
+      if (gleoRequest.current) bridge.complete(gleoRequest.current, false, "");
     };
   }, []);
   useEffect(() => {
     if (session?.voiceInput !== "gleo" || !["insufficient", "ai-error"].includes(session.phase)) return;
-    if (gleoRequest.current) window.GazeeGleo?.complete(gleoRequest.current, false);
+    if (gleoRequest.current) window.GazeeGleo?.complete(gleoRequest.current, false, "");
     gleoRequest.current = null;
   }, [session?.voiceInput, session?.phase]);
 
@@ -448,18 +441,24 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
   }
 
   const receiveRelay = useEffectEvent(({ post, simulation }: RelayReport, distance: number) => {
-    if (!simulation || receivedRelayId.current === post.id) return;
+    if (!simulation || receivedRelayIds.current.has(post.id)) return;
     const event = makeRearNotification(post, distance, simulation.notification);
     if (!event) return;
-    receivedRelayId.current = post.id;
+    receivedRelayIds.current.add(post.id);
+    if (inPleos) {
+      setSelected(post.community);
+      setOpenedReport(null);
+      window.scrollTo(0, 0);
+    }
     // The board already contains the published post. Keep its publication time
     // while showing the receiver's scripted card and playing its chime.
     delivery.receive(event);
   });
   useEffect(() => {
-    if (relay.role === "rear" && relay.report && !offline) receiveRelay(relay.report, relay.distance);
+    if (relay.role === "rear" && relay.report && !offline) {
+      receiveRelay(relay.report, relay.distance);
+    }
   }, [relay.role, relay.report, relay.distance, offline]);
-
 
   useEffect(() => {
     const id = setInterval(() => setClock(new Date()), 30_000);
@@ -594,8 +593,6 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
       });
   }
   useEffect(() => () => ttsTestController.current?.abort(), []);
-  const inPleos = window.GazeeSpeech !== undefined;
-  const DemoControls = inPleos ? "details" : "section";
 
   if (vehicleScreen === "DRIVING") {
     return (
@@ -604,7 +601,6 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
         selected={selected}
         onSelect={setSelected}
         notification={notification}
-        relay={relay}
       />
     );
   }
@@ -724,7 +720,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
                       {offline
                         ? "자동 갱신 일시 중단"
                         : `${mockConfig.refreshMs / 1000}초마다 새 소식 확인`}
-                      <span>모든 글과 차량 근거는 시연용 Mock 데이터입니다.</span>
+                      <span>시연용 게시판</span>
                     </div>
                   </section>
                 )}
@@ -736,7 +732,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
                     community={communityName(voiceSession.community)}
                     onRetry={flow.retry}
                     onCancel={() => {
-                      if (gleoRequest.current) window.GazeeGleo?.complete(gleoRequest.current, false);
+                      if (gleoRequest.current) window.GazeeGleo?.complete(gleoRequest.current, false, "");
                       gleoRequest.current = null;
                       flow.cancel();
                     }}
@@ -798,225 +794,6 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
           </main>
         </CommunityLayout>
       </VehicleFrame>
-      {!readOnly && <>
-      <DemoControls className="simulation-console" aria-label="시연 조작 영역">
-        {inPleos && <summary>시연 조작 열기</summary>}
-        <DemoVehicleControls relay={relay} />
-        <div className="console-top">
-          <div className="console-label">
-            <span className="console-icon">
-              <Icon name="flask" size={21} />
-            </span>
-            <div>
-              <h2>시뮬레이션</h2>
-              <p>역할·거리·가상 주행 상태를 조작하는 시연 전용 영역입니다.</p>
-            </div>
-          </div>
-          <div className="vehicle-control">
-            <span>주행 UX 제한</span>
-            <div className="segmented">
-              {(
-                [
-                  ["driving", "주행 제한 ON"],
-                  ["stopped", "주행 제한 OFF"],
-                ] as const
-              ).map(([value, label]) => (
-                <button
-                  key={value}
-                  className={(value === "driving" ? driving : !driving) ? "active" : ""}
-                  aria-pressed={value === "driving" ? driving : !driving}
-                  onClick={() => setVehicleState(value)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="notification-demo-actions">
-            <button type="button" className="receive-scenario-button" onClick={testTtsOutput} disabled={ttsTesting || busy || wakeListening}>
-              <Icon name="speaker" size={17} />알림음 테스트
-            </button>
-            {ttsTestStatus && <span role="status">{ttsTestStatus}</span>}
-            <button className="reset-demo-button" onClick={onReset}>
-              <Icon name="refresh" size={16} />
-              시연 초기화
-            </button>
-          </div>
-          <button
-            className="settings-toggle"
-            onClick={() => setDemoOpen((value) => !value)}
-            aria-expanded={demoOpen}
-          >
-            예외 상태 설정
-            <Icon name="down" size={15} />
-          </button>
-        </div>
-        <SimulationWorkspace
-          scenarioId={scenarioId}
-          disabled={!!session}
-          canReport={!busy && !offline}
-          canReceive={!offline && !session}
-          onSelect={changeScenario}
-          onGleo={window.GazeeGleo && vehicleScreen === "NORMAL" ? () => {
-            setWakeListening(false);
-            setOpenedReport(null);
-            setGleoDemo(gleoDemo ? null : { scenarioId, community: selected });
-            // Show the existing waiting card before the first report arrives.
-            // Starting a Gleo demo does not switch roles or fabricate a report.
-            if (driving && !gleoDemo) window.scrollTo(0, 0);
-          } : undefined}
-          gleoExample={gleoDemo ? simulationTabs.find((tab) => tab.reportScenarioId === gleoDemo.scenarioId)?.gleoExample : undefined}
-          onReport={() => {
-            setGleoDemo(null);
-            if (simulation.reportMode !== "dictation") {
-              flow.beginVoiceDemo(selected, scenario, simulation.speed);
-              window.scrollTo(0, 0);
-              return;
-            }
-            if (driving) setToast(DICTATION_REQUIRES_STOPPED);
-            else if (session) setToast("작성 중인 제보를 먼저 등록하거나 취소해 주세요.");
-            else {
-              flow.beginDictationDemo(selected, scenario, simulation.speed);
-              window.scrollTo(0, 0);
-            }
-          }}
-          onReceive={receiveScenario}
-        />
-        {demoOpen && (
-          <div className="console-details">
-            <div className="notification-event-trace">
-              <span>
-                <Icon name="info" size={14} />
-                수신 시뮬레이션은 현재 선택된 탭에만 전달합니다.
-              </span>
-              <span>시나리오 수신 → 제보 카드 표시 및 알림음 1회</span>
-              <b>수신 {receivedCount}건</b>
-            </div>
-            <div className="demo-options">
-              <label>
-                기존 작성 시연 · 차량 상태
-                <select
-                  value={vehicleState}
-                  onChange={(e) => setVehicleState(e.target.value as VehicleState)}
-                >
-                  <option value="driving">주행 제한</option>
-                  <option value="stopped">정차 D</option>
-                  <option value="parked">주차 P</option>
-                </select>
-              </label>
-              <label>
-                음성 인식 · 다음 1회
-                <select
-                  value={speechFault}
-                  disabled={speechActive}
-                  onChange={(e) => setSpeechFault(e.target.value as SpeechFault)}
-                >
-                  <option value="none">정상 인식</option>
-                  <option value="stt">음성 인식 실패</option>
-                  <option value="insufficient">발화 내용 부족</option>
-                </select>
-              </label>
-              <label>
-                Gemini · 다음 1회
-                <select
-                  value={failAI ? "fail" : "success"}
-                  disabled={session?.phase === "processing"}
-                  onChange={(e) => setFailAI(e.target.value === "fail")}
-                >
-                  <option value="success">처리 성공</option>
-                  <option value="fail">처리 실패</option>
-                </select>
-              </label>
-              <label>
-                시나리오
-                <select
-                  value={scenarioId}
-                  disabled={!!session}
-                  onChange={(e) => changeScenario(e.target.value)}
-                >
-                  {scenarios.map((item) => (
-                    <option value={item.id} key={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                목록 상태
-                <select
-                  value={viewState}
-                  onChange={(e) => setViewState(e.target.value as FeedView)}
-                >
-                  <option value="normal">기본 목록</option>
-                  <option value="empty">게시글 없음</option>
-                  <option value="loading">불러오는 중</option>
-                </select>
-              </label>
-              <label className="checkbox-option">
-                <input
-                  type="checkbox"
-                  checked={vehicleUnavailable}
-                  disabled={session?.phase === "processing"}
-                  onChange={(e) => setVehicleUnavailable(e.target.checked)}
-                />
-                차량 데이터 조회 실패
-              </label>
-              <label className="checkbox-option">
-                <input
-                  type="checkbox"
-                  checked={noSimilar}
-                  disabled={session?.phase === "processing"}
-                  onChange={(e) => setNoSimilar(e.target.checked)}
-                />
-                유사 글 없음
-              </label>
-              <label className="checkbox-option">
-                <input
-                  type="checkbox"
-                  checked={offline}
-                  onChange={(e) => setOffline(e.target.checked)}
-                />
-                네트워크 연결 끊김
-              </label>
-            </div>
-            <div className="trace-strip">
-              <span>
-                <Icon name="spark" size={14} />
-                Gemini Mock 호출 <b data-testid="ai-call-count">{calls}회</b>
-              </span>
-              <span>
-                {lastInput
-                  ? `최근 입력 · 본문 ${lastInput.body.length}자 / 차량 ${Object.keys(lastInput.vehicleData).length}개 필드 / 유사 글 ${lastInput.similarPosts.length}개`
-                  : "원본 본문·모의 차량 데이터·같은 커뮤니티의 기존 글을 한 번에 전달합니다."}
-              </span>
-              <button
-                disabled={offline}
-                onClick={() =>
-                  updateFeed(selected, (current) => ({
-                    ...current,
-                    pending: [...makeIncoming(boardSeeds[selected], selected, 2), ...current.pending],
-                  }))
-                }
-              >
-                새 글 2개 도착
-                <Icon name="plus" size={13} />
-              </button>
-            </div>
-          </div>
-        )}
-      </DemoControls>
-      <div className="journey-guide">
-        <span>
-          <b>01</b>주행 제한 ON → 블랙아이스 수신
-        </span>
-        <span>
-          <b>02</b>탭 전환 → 기존 카드 복구 · 중복 알림음 없음
-        </span>
-        <span>
-          <b>03</b>주행 제한 OFF → 커뮤니티 목록
-        </span>
-      </div>
-      </>}
       {!readOnly && toast && (
         <div className="toast" role="status">
           <Icon name="check" size={18} />

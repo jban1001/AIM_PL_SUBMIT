@@ -49,7 +49,7 @@ export function VoiceReport({
       <span className="eyebrow">VOICE REPORT</span>
       <h2 role="status">
         {success
-          ? "제보가 등록되었어요."
+          ? "제보가 등록되었습니다."
           : processing
             ? (session.voiceInput === "gleo" ? "제보를 등록하는 중이에요" : "제보를 정리하는 중이에요")
             : failed

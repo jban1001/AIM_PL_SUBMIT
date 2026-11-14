@@ -3,6 +3,15 @@ import assert from "node:assert/strict";
 import { boardSeeds } from "../src/services/boardSeeds.ts";
 import { createPosts, makeIncoming, nextPagePosts, pagePosts } from "../src/services/mockCommunity.ts";
 
+test("각 게시판의 최신 예시 네 개에 네 범주가 모두 나온다", () => {
+  const categories = new Set(["주차", "교통", "도로 위험", "지역 정보"]);
+  for (const community of ["nearby", "destination", "direction"] as const) {
+    const seed = boardSeeds[community];
+    const newest = pagePosts(createPosts(seed, community), 0).slice(0, 4);
+    assert.deepEqual(new Set(newest.map(({ category }) => category)), categories);
+  }
+});
+
 test("목적지와 방향 게시판은 초기·추가 조회·새 글에 각각의 전용 예시를 사용한다", () => {
   const nearby = new Set(boardSeeds.nearby.examples.map((post) => post.summary));
   for (const community of ["destination", "direction"] as const) {

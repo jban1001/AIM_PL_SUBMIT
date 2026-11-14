@@ -51,7 +51,7 @@ test("앞차 제보 내용과 범주가 달라도 뒤차는 선택된 시나리�
     const report = {
       ...direct.post,
       id: "front-report",
-      category: "기타" as const,
+      category: category === "지역 정보" ? "교통" as const : "지역 정보" as const,
       summary: "강남역 앞 공사 제보",
       evidence: "앞차 제보의 근거",
       description: "앞차 제보의 상세 내용",

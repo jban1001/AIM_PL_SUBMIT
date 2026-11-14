@@ -1,4 +1,4 @@
-import type { AIResult } from "../domain/types.ts";
+import type { AIResult, Category } from "../domain/types.ts";
 
 export function normalizeReportBody(body: string) {
   return body
@@ -118,13 +118,23 @@ export function validateGleoReportTitle(body: string) {
 export function validateReportBody(body: string) {
   return reportInputError(body) === null;
 }
-// Deterministic Mock fallback, not keyword classification: never invent a road,
-// cause, vehicle observation, or scenario label for arbitrary user text.
+function reportCategory(body: string): Category {
+  if (/블랙\s*아이스|빙판|결빙|미끄|얼어붙|낙하물|포트홀|낙석|침수|역주행|사고|충돌|추돌|도로\s*파손|도로\s*위험/u.test(body))
+    return "도로 위험";
+  if (/만차|빈\s*(?:주차\s*)?(?:자리|공간)|주차\s*(?:가능|불가|요금|공간|자리)|충전\s*(?:기|소|케이블|상태|중|이|은|을|안|불가)/u.test(body))
+    return "주차";
+  if (/교통|정체|막히|막힌|막혀|막힘|밀리|밀려|서행|차량\s*흐름|신호\s*대기|차(?:량|들)?가\s*많|우회|통제|차선\s*공사/u.test(body))
+    return "교통";
+  if (/주차|충전/u.test(body)) return "주차";
+  return "지역 정보";
+}
+
+// Retain the driver's wording and leave vehicle evidence empty for free-form reports.
 export function conservativeResult(body: string): AIResult {
   const original = normalizeReportBody(body);
   return {
     summary: original.length > 65 ? `${original.slice(0, 64)}…` : original,
     evidence: "",
-    category: "기타",
+    category: reportCategory(original),
   };
 }

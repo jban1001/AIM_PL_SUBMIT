@@ -492,10 +492,6 @@
   background: #edf5f0;
   color: #85ab95;
 }
-.category.other {
-  background: #f2f1f5;
-  color: #a29baa;
-}
 .post-meta-right {
   display: flex;
   gap: 12px;

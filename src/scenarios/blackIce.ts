@@ -2,13 +2,13 @@ import type { Scenario } from "../domain/types.ts";
 import { conservativeResult, matchesDemoUtterance, normalizeGleoReport, normalizeReportBody } from "../services/reportInput.ts";
 
 export const BLACK_ICE_SUMMARY = "인하대역 3번 출구 방면 1차선 도로 블랙아이스 제보";
-export const BLACK_ICE_EVIDENCE = "차량 데이터 확인 결과, 인하대역 3번 출구 인근을 통과한 차량에서 결빙 위험 신호가 확인되어 해당 구간의 블랙아이스가 의심됩니다.";
+export const BLACK_ICE_EVIDENCE = "인하대역 3번 출구 인근을 통과한 차량에서 결빙 위험 신호가 감지돼 블랙아이스가 의심됩니다.";
 
 export function matchesInhaBlackIce(utterance: string | undefined, title: string) {
   const body = utterance || title;
   if (matchesDemoUtterance(body, blackIce.exampleInput)) return true;
-  const compact = normalizeGleoReport(body).replace(/[\s,.!?。]+/gu, "");
-  return /^인하대역3번출구(?:쯤|부근|근처|방면|인근)?(?:에|에서)?블랙아이스(?:가?있(?:어요|다고|습니다)|발생(?:했어요|했다고)?|의심)?(?:제보)?$/u.test(compact);
+  const compact = normalizeGleoReport(body).replace(/^(?:지금|방금|현재)\s+/u, "").replace(/[^\p{L}\p{N}]/gu, "");
+  return /^인하대역3번출구(?:쯤|부근|근처|방면|인근)?(?:에|에서)?(?:지금|현재)?블랙아이스(?:가?있(?:어요|다고|습니다)|(?:현상)?발생(?:했어요|했다고)?|의심(?:돼요)?)?(?:제보)?$/u.test(compact);
 }
 
 export const blackIce: Scenario = {
@@ -33,7 +33,7 @@ export const blackIce: Scenario = {
     {
       category: "교통",
       summary: "독배로 인하대역 방면, 차량 흐름이 느려요.\n평소보다 여유 있게 이동하세요.",
-      evidence: "모의 주행 속도가 최근 5분간 평균 18km/h로 설정되었습니다.",
+      evidence: "독배로 인하대역 방면에서 최근 5분간 평균 주행 속도는 18 km/h였습니다.",
     },
     {
       category: "주차",
@@ -46,7 +46,7 @@ export const blackIce: Scenario = {
       evidence: "",
     },
     {
-      category: "기타",
+      category: "도로 위험",
       summary: "안전거리를 충분히 두고 이동해 주세요.\n오늘도 안전한 귀갓길 되세요.",
       evidence: "",
     },

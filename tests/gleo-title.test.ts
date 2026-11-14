@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { matchesDemoUtterance, normalizeGleoReport, validateGleoReportTitle, validateReportBody } from "../src/services/reportInput.ts";
 import { processReport } from "../src/services/mockCommunity.ts";
 import { blackIce, matchesInhaBlackIce } from "../src/scenarios/blackIce.ts";
-import { congestion, matchesIncheonCongestion } from "../src/scenarios/congestion.ts";
+import { congestion, matchesIncheonCongestion, TRAFFIC_EVIDENCE, TRAFFIC_SUMMARY } from "../src/scenarios/congestion.ts";
 import { mockConfig } from "../src/domain/types.ts";
 import { matchReportSimulation } from "../src/scenarios/notifications/index.ts";
 import { parking } from "../src/scenarios/parking.ts";
@@ -71,6 +71,14 @@ test("입력한 제보의 첫 구절이나 짧은 제목으로 해당 시연을 
   assert.equal(matchReportSimulation("인하대역 3번 출구 근처 블랙아이스가 없어요."), undefined);
   assert.equal(matchReportSimulation("인천 대교 진입 구간에서 차가 너무 막혀요. 뒤쪽까지 밀려요"), congestion);
   assert.equal(matchReportSimulation("인천대로 정체중이라고"), congestion);
+  assert.equal(matchReportSimulation("인천대교 현재 정체 중"), congestion);
+  assert.equal(matchReportSimulation("지금 인천대교가 막혀요"), congestion);
+  assert.equal(matchReportSimulation("인천대교 정체", "가지 앱에 인천대교가 현재 정체 중이라고 제보해줘."), congestion);
+  assert.equal(matchReportSimulation("인천대교 현재 정체 중이 아니에요"), undefined);
+  assert.equal(matchReportSimulation("인하대역 3번 출구에 현재 블랙아이스 발생"), blackIce);
+  assert.equal(matchReportSimulation("비룡 주차장 지하 2층 충전기가 안 돼요"), parking);
+  assert.equal(matchReportSimulation("비룡 주차장 지하 3층 충전기가 안 돼요"), undefined);
+  assert.equal(matchReportSimulation("미추홀구청 근처 국밥집 추천"), local);
   assert.equal(matchReportSimulation("인천대교 정체", "가지 앱에 인천대로 정체 중이라고 제보해줘."), congestion);
   assert.equal(matchReportSimulation("인천대로 정체 중이 아니에요"), undefined);
   assert.equal(matchReportSimulation("경인대로 정체 중이에요"), undefined);
@@ -80,6 +88,27 @@ test("입력한 제보의 첫 구절이나 짧은 제목으로 해당 시연을 
   assert.equal(matchReportSimulation("서울숲 공영주차장이 만차예요"), undefined);
   assert.equal(matchReportSimulation("인천대교 진입 지점에서 차가 막히지 않아요"), undefined);
   assert.equal(matchReportSimulation("인하대역 2번 출구쯤 블랙아이스 현상 발생해서"), undefined);
+});
+
+test("마이크의 반복 등록 요청이 잘못 인식돼도 같은 시연 카드에 매칭된다", () => {
+  const ending = " 재고해줘 내 보호해줘 제 오해 줘";
+  assert.equal(matchReportSimulation("인하대역 3번출구 쯤에 블랙아이스 있다고" + ending), blackIce);
+  assert.equal(matchReportSimulation("인하대역 2번출구 쯤에 블랙아이스 있다고" + ending), undefined);
+  assert.equal(matchReportSimulation("인하대역 3번출구 쯤에 블랙아이스가 없어요" + ending), undefined);
+  assert.equal(matchReportSimulation("인천대교 현재 정체 중" + ending), congestion);
+});
+
+test("짧은 인천대교 제보가 기존 고정 카드의 제목과 제보 근거로 등록된다", async () => {
+  const scenario = matchReportSimulation("인천대교 현재 정체 중");
+  assert.equal(scenario, congestion);
+  const post = await processReport(scenario, scenario.exampleInput, "nearby", [], false, {
+    aiDelayMs: 0,
+    scriptedExample: true,
+    useScenarioTemplate: true,
+  });
+  assert.equal(post.summary, TRAFFIC_SUMMARY);
+  assert.equal(post.evidence, TRAFFIC_EVIDENCE);
+  assert.equal(post.category, "교통");
 });
 
 test("시연과 관계없는 글은 입력한 내용으로 등록한다", async () => {
@@ -92,5 +121,5 @@ test("시연과 관계없는 글은 입력한 내용으로 등록한다", async 
   });
   assert.equal(post.originalBody, body);
   assert.equal(post.evidence, "");
-  assert.equal(post.category, "기타");
+  assert.equal(post.category, "주차");
 });

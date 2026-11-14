@@ -48,7 +48,7 @@ export function DrivingRestrictionPanel({
       {publishedPost ? (
         <section className="published-report" aria-label="등록된 내 제보">
           <div className="notification-arrival">
-            <span><Icon name="check" size={17} />제보 등록 완료</span>
+            <span><Icon name="check" size={17} />제보가 등록되었습니다.</span>
             {publishedPost.simulated && <span className="mock-badge">MOCK DATA</span>}
           </div>
           <div className="notification-message">
