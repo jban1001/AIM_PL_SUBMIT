@@ -37,6 +37,7 @@
 .vehicle-frame .vehicle-status { background: #eef0f3; color: #454b56; font-size: 13px; gap: 9px; padding: 10px 14px; border-radius: 6px; }
 .vehicle-frame .status-dot { background: #298267; }
 .vehicle-frame .status-dot.amber { background: #b77c1e; }
+.vehicle-frame .status-dot.red { background: #d0392b; }
 .vehicle-frame .topbar time { color: #242832; font-size: 22px; font-weight: 650; }
 .vehicle-frame .main-content { padding: 30px 36px 0; }
 .vehicle-frame .page-heading { margin-bottom: 26px; }

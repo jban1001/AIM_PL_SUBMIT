@@ -8,7 +8,7 @@ import {
   type VehicleState,
 } from "../domain/types";
 import { Icon } from "./Icon";
-import { vehicleStatusLabel } from "../domain/postDetails";
+import { vehicleStatus } from "../domain/postDetails";
 
 export function AppLayout({
   children,
@@ -16,13 +16,16 @@ export function AppLayout({
   time,
   readOnly = false,
   observedMotion,
+  lowSpeed = false,
 }: {
   children: ReactNode;
   vehicleState: VehicleState;
   time: string;
   readOnly?: boolean;
   observedMotion?: VehicleState | null;
+  lowSpeed?: boolean;
 }) {
+  const status = vehicleStatus(vehicleState, readOnly, observedMotion, lowSpeed);
   return (
     <div className="app-shell">
       <div className="app-body">
@@ -32,9 +35,9 @@ export function AppLayout({
           </div>
           <span className="topbar-subtitle">도로 위의 커뮤니티</span>
           <div className="vehicle-status">
-            <span className={`status-dot ${vehicleState === "driving" ? "amber" : ""}`} />
+            <span className={`status-dot ${status.tone}`} />
             <Icon name="car" size={19} />
-            {vehicleStatusLabel(vehicleState, readOnly, observedMotion)}
+            {status.label}
           </div>
           <span className="topbar-line" />
           <time>{time}</time>

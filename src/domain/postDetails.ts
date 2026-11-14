@@ -16,13 +16,27 @@ export function notificationForPost(
   };
 }
 
+export type VehicleStatusTone = "red" | "amber" | "green" | "muted";
+
+// lowSpeed: the car rolls in Drive below the 30 km/h restriction threshold.
+export function vehicleStatus(
+  state: "driving" | "parked" | "stopped",
+  readOnly = false,
+  observedMotion?: "driving" | "parked" | "stopped" | null,
+  lowSpeed = false,
+): { label: string; tone: VehicleStatusTone } {
+  if (readOnly) return { label: "읽기 전용", tone: "muted" };
+  if (state === "driving") return { label: "주행 제한 중", tone: "red" };
+  if (state === "parked") return { label: "주차 중", tone: "green" };
+  if (observedMotion === "driving") return { label: "주행 중", tone: "amber" };
+  return lowSpeed ? { label: "저속 주행 중", tone: "amber" } : { label: "정차 중", tone: "green" };
+}
+
 export function vehicleStatusLabel(
   state: "driving" | "parked" | "stopped",
   readOnly = false,
   observedMotion?: "driving" | "parked" | "stopped" | null,
+  lowSpeed = false,
 ) {
-  if (readOnly) return "읽기 전용";
-  if (state === "driving") return "주행 제한 중";
-  if (state === "parked") return "주차 중";
-  return observedMotion === "driving" ? "주행 중" : "정차 중";
+  return vehicleStatus(state, readOnly, observedMotion, lowSpeed).label;
 }

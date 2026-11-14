@@ -109,6 +109,9 @@
 .status-dot.amber {
   background: #c8a15d;
 }
+.status-dot.red {
+  background: #d84a3a;
+}
 .status-dot.muted {
   background: #aaa3b4;
 }

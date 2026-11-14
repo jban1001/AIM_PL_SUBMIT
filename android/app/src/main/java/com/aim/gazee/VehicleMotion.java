@@ -10,6 +10,8 @@ import android.util.Log;
 final class VehicleMotion implements CarPropertyManager.CarPropertyEventCallback {
     private static final String TAG = "GazeeVehicle";
     private static final float RESTRICTION_SPEED_MPS = (float) (30.0 / 3.6);
+    // Below 1 km/h the car is treated as stopped rather than low-speed driving.
+    private static final float MOVING_SPEED_MPS = (float) (1.0 / 3.6);
 
     private final Runnable onChange;
     private CarPropertyManager manager;
@@ -56,6 +58,12 @@ final class VehicleMotion implements CarPropertyManager.CarPropertyEventCallback
         if (gear != null && gear == VehicleGear.GEAR_PARK) return "parked";
         if (!hasDriveSpeed()) return null;
         return speedMetersPerSecond >= RESTRICTION_SPEED_MPS ? "driving" : "stopped";
+    }
+
+    /** True while the car rolls in Drive below the restriction speed (low-speed driving). */
+    boolean isMovingBelowLimit() {
+        return hasDriveSpeed() && speedMetersPerSecond >= MOVING_SPEED_MPS
+                && speedMetersPerSecond < RESTRICTION_SPEED_MPS;
     }
 
     @Override

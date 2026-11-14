@@ -287,10 +287,14 @@ public final class MainActivity extends Activity {
     private void publishDemoMotion() {
         if (!vehiclePageReady || !canInteract || motion == null) return;
         String state = motion.demoState();
-        if (state == null || state.equals(lastDemoMotion)) return;
-        lastDemoMotion = state;
-        Log.i(LOG_TAG, "Virtual Console mode: " + state);
-        webView.evaluateJavascript("window.applyGazeeDemoMotion?.(" + JSONObject.quote(state) + ")", null);
+        if (state == null) return;
+        boolean moving = motion.isMovingBelowLimit();
+        String key = moving ? state + ":moving" : state;
+        if (key.equals(lastDemoMotion)) return;
+        lastDemoMotion = key;
+        Log.i(LOG_TAG, "Virtual Console mode: " + key);
+        webView.evaluateJavascript("window.applyGazeeDemoMotion?.(" + JSONObject.quote(state) + ", "
+                + moving + ")", null);
     }
 
     private void renderScreen() {

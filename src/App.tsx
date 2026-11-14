@@ -66,7 +66,7 @@ declare global {
   interface Window {
     GazeeVehicle?: { ready(): void };
     applyGazeeVehicleScreen?: (mode: VehicleScreen) => true;
-    applyGazeeDemoMotion?: (state: VehicleState) => void;
+    applyGazeeDemoMotion?: (state: VehicleState, moving?: boolean) => void;
     selectGazeeDemoRole?: (role: RelayDemo["role"]) => "ok" | "app-not-ready" | "report-required";
     GazeeGleo?: {
       ready(): void;
@@ -201,10 +201,11 @@ function initialFeeds(preferredCategories: Category[], relay: RelayDemo) {
     }),
   ) as Record<CommunityId, Feed>;
 }
-function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen, vehicleState, observedMotion, setVehicleState }: {
+function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen, vehicleState, observedMotion, lowSpeed, setVehicleState }: {
   vehicleScreen: VehicleScreen;
   vehicleState: VehicleState;
   observedMotion: VehicleState | null;
+  lowSpeed: boolean;
   setVehicleState: (state: VehicleState) => void;
   relay: RelayDemo;
   onReset: () => void;
@@ -622,6 +623,7 @@ function RoadtownPrototype({ onReset, preferredCategories, relay, vehicleScreen,
         <CommunityLayout
           vehicleState={vehicleState}
           observedMotion={observedMotion}
+          lowSpeed={lowSpeed}
           readOnly={readOnly}
           time={clock.toLocaleTimeString("ko-KR", {
             hour: "2-digit",
@@ -810,6 +812,8 @@ export default function App() {
   const [vehicleState, setVehicleState] = useState<VehicleState>(initialVehicleState);
   const demoMotion = useRef<VehicleState | null>(null);
   const [observedMotion, setObservedMotion] = useState<VehicleState | null>(null);
+  // Drive below 30 km/h while actually moving: shown as low-speed driving.
+  const [lowSpeed, setLowSpeed] = useState(false);
   useLayoutEffect(() => {
     const bridge = window.GazeeVehicle;
     if (!bridge) return;
@@ -817,9 +821,10 @@ export default function App() {
       flushSync(() => setVehicleScreen(mode));
       return true;
     };
-    window.applyGazeeDemoMotion = (state) => {
+    window.applyGazeeDemoMotion = (state, moving = false) => {
       demoMotion.current = state;
       setObservedMotion(state);
+      setLowSpeed(state === "stopped" && moving);
       setVehicleState(state);
     };
     bridge.ready();
@@ -879,6 +884,7 @@ export default function App() {
           vehicleScreen={vehicleScreen}
           vehicleState={vehicleState}
           observedMotion={observedMotion}
+          lowSpeed={lowSpeed}
           setVehicleState={setVehicleState}
           key={`${demoVersion}-${role}`}
           onReset={reset}
