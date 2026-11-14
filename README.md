@@ -83,32 +83,6 @@ pnpm dev
 
 Windows APK 설치, 마이크 설정, GLEO 호출과 음성 오류 확인은 [Android 실행 안내](android/README.md)를 참고하세요.
 
-### 제출 APK 설치
-
-| 항목 | 내용 |
-| --- | --- |
-| APK 위치 | [`apk/AIM_GAZEE_release.apk`](apk/AIM_GAZEE_release.apk) |
-| 용량 초과 시 | 저장소 파일 제한(100 MB)을 넘으면 [GitHub Releases](https://github.com/jban1001/AIM_PL_SUBMIT/releases)에 등록합니다. |
-| 빌드 방식 | [GitHub Actions](.github/workflows/build-apk.yml)가 `main`에 push될 때마다 release APK를 빌드해 `apk/`에 올립니다. |
-| 서명 | Android debug 키로 서명한 실행 가능한 release 빌드입니다. 에뮬레이터 시연 기능(기어·속도 연동, 뒤차 전환)은 debuggable 빌드에서만 켜지므로 release 빌드에도 `isDebuggable`을 적용했습니다. |
-
-Pleos Connect 에뮬레이터를 실행한 뒤 저장소 루트에서 설치합니다. 다른 PC에서 빌드한 GAZEE가 이미 설치되어 있으면 서명이 달라 설치가 거부되므로 먼저 삭제합니다.
-
-```powershell
-adb uninstall com.aim.gazee
-adb install apk/AIM_GAZEE_release.apk
-```
-
-## 테스트 환경
-
-| 항목 | 내용 |
-| --- | --- |
-| 에뮬레이터 | Pleos Connect v2.1.0 (Android 14, API 34, x86_64) |
-| 화면 사양 | 2560 × 1440, 160 dpi |
-| 앱 | `com.aim.gazee` 0.1.0, minSdk 28, targetSdk 36 |
-| 빌드 도구 | Node.js 24, pnpm, JDK 25, Gradle 9.4.1, Android Gradle Plugin 9.2.1 |
-| 필요한 설정 | 음성 입력: 에뮬레이터 **Extended Controls → Microphone**에서 호스트 마이크 입력을 켭니다. 주행 모드: Virtual Console에서 기어와 속도를 조작합니다. 뒤차 시연: `adb`가 PATH에 있어야 합니다. |
-
 ## 구현 범위와 다음 단계
 
 현재 게시글과 수신 이력은 시연 세션에서 관리합니다. 수신은 시연에 등록한 제보를 같은 에뮬레이터에서 다시 받는 방식입니다. 접근 거리, 경로별 게시글과 카드의 차량 관측 근거는 시연 데이터입니다. 제보 정리와 범주 지정은 시연 템플릿과 입력 처리 규칙을 사용합니다.

@@ -57,19 +57,6 @@ android {
         versionName = "0.1.0"
     }
 
-    buildTypes {
-        release {
-            // Contest submission: an installable release APK that keeps the
-            // emulator demo mode (gated on FLAG_DEBUGGABLE in MainActivity).
-            signingConfig = signingConfigs.getByName("debug")
-            isDebuggable = true
-        }
-    }
-
-    // The release APK reuses the debug manifest overlay: distraction-optimized
-    // activity plus gear/speed permissions, so driving mode works the same.
-    sourceSets.getByName("release").manifest.srcFile("src/debug/AndroidManifest.xml")
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
